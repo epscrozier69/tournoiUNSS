@@ -147,7 +147,8 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 .match-row{
   display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:#f8fafc;border:1px solid var(--line);flex-wrap:wrap;
 }
-.match-row .teams{flex:1;min-width:180px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.match-row .teams{flex:1;min-width:180px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.match-row .teams .winner{background:#fef3c7;color:#92400e;font-weight:800;padding:2px 8px;border-radius:6px;}
 .match-row .score-chip{background:#1e293b;color:#fff;border-radius:8px;padding:3px 9px;font-weight:800;font-size:.85rem;}
 .match-row .vs{color:var(--muted);font-weight:600;font-size:.8rem;}
 .match-row .ref{font-size:.76rem;color:var(--muted);}
@@ -161,25 +162,31 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 #liveBanner{
   position:sticky;top:186px;z-index:30;
   background:linear-gradient(120deg,#0f172a,#1e3a8a);
-  color:#fff;border-radius:var(--radius);padding:16px 20px;margin-bottom:18px;
+  color:#fff;border-radius:var(--radius);padding:48px 32px;margin-bottom:18px;
   box-shadow:0 8px 22px rgba(15,23,42,.35);
+  min-height:66vh;display:flex;flex-direction:column;justify-content:center;
 }
-#liveBanner .label{font-size:.78rem;text-transform:uppercase;letter-spacing:.6px;opacity:.75;margin-bottom:6px;}
-.live-main{display:flex;align-items:center;justify-content:center;gap:22px;flex-wrap:wrap;}
+#liveBanner .label{font-size:1rem;text-transform:uppercase;letter-spacing:.6px;opacity:.75;margin-bottom:18px;text-align:center;}
+.live-main{display:flex;align-items:center;justify-content:center;gap:48px;flex-wrap:wrap;}
 .team-score-btn{
-  background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.25);border-radius:16px;
-  padding:14px 20px;min-width:170px;text-align:center;color:#fff;
+  background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.25);border-radius:22px;
+  padding:30px 40px;min-width:260px;text-align:center;color:#fff;
 }
 .team-score-btn:hover{background:rgba(255,255,255,.22);}
-.team-score-btn .tname{font-weight:800;font-size:1.05rem;margin-bottom:6px;}
-.team-score-btn .tscore{font-size:2.6rem;font-weight:900;line-height:1;}
-.minus-btn{display:inline-block;margin-top:6px;background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:8px;padding:4px 10px;font-size:.85rem;}
-#chronoDisplay{font-size:3.2rem;font-weight:900;letter-spacing:2px;font-variant-numeric:tabular-nums;min-width:200px;text-align:center;}
+.team-score-btn .tname{font-weight:800;font-size:1.7rem;margin-bottom:14px;}
+.team-score-btn .tscore{font-size:5.5rem;font-weight:900;line-height:1;}
+.minus-btn{display:inline-block;margin-top:14px;background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:10px;padding:8px 16px;font-size:1.05rem;}
+#chronoDisplay{font-size:7rem;font-weight:900;letter-spacing:3px;font-variant-numeric:tabular-nums;min-width:320px;text-align:center;}
 #chronoDisplay.overtime{color:#fca5a5;}
-.live-sub{text-align:center;font-size:.8rem;opacity:.8;margin-top:6px;}
-.live-controls{display:flex;justify-content:center;gap:10px;margin-top:14px;flex-wrap:wrap;}
-.tiebreak-box{text-align:center;margin-top:10px;}
-.tiebreak-box .btn{margin:4px;}
+.live-sub{text-align:center;font-size:1.05rem;opacity:.85;margin-top:14px;}
+.live-controls{display:flex;justify-content:center;gap:16px;margin-top:32px;flex-wrap:wrap;}
+.live-controls .btn{font-size:1.1rem;padding:14px 24px;}
+.live-abandon-link{text-align:center;font-size:.85rem;opacity:.65;margin-top:20px;}
+.link-btn{background:none;border:none;padding:0;color:#fff;text-decoration:underline;cursor:pointer;font:inherit;}
+.link-btn:hover{opacity:.8;}
+.tiebreak-box{text-align:center;margin-top:20px;}
+.tiebreak-box .btn{margin:4px;font-size:1.1rem;padding:14px 20px;}
+.color-dot{display:inline-block;width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.25);vertical-align:middle;margin-right:6px;}
 
 .field-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:6px;}
 .field{display:flex;flex-direction:column;gap:4px;}
@@ -191,14 +198,18 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
   .topbar h1{font-size:1.1rem;}
   .main-tabs{top:58px;}
   #catTabsBar{top:112px;}
-  #liveBanner{top:164px;}
-  #chronoDisplay{font-size:2.5rem;}
-  .team-score-btn .tscore{font-size:2.1rem;}
+  #liveBanner{top:164px;min-height:56vh;padding:32px 20px;}
+  #chronoDisplay{font-size:4rem;min-width:220px;}
+  .team-score-btn{padding:20px 24px;min-width:180px;}
+  .team-score-btn .tscore{font-size:3.4rem;}
+  .team-score-btn .tname{font-size:1.2rem;}
   th,td{font-size:.8rem;padding:6px 9px;}
 }
 @media (max-width:640px){
   .standings-row{flex-direction:column;}
-  .team-score-btn{min-width:130px;padding:10px 12px;}
+  #liveBanner{min-height:auto;padding:24px 16px;}
+  .team-score-btn{min-width:130px;padding:14px 16px;}
+  #chronoDisplay{font-size:3rem;min-width:0;}
 }
 </style>
 </head>
@@ -230,6 +241,12 @@ const PHASE_LABELS = {
   cl3e:"Classement des 3e de poule"
 };
 const STORAGE_KEY = "unssFutsalV1";
+const COLOR_PRESETS = [
+  {label:"Rouge", hex:"#dc2626"}, {label:"Bleu", hex:"#2563eb"}, {label:"Vert", hex:"#16a34a"},
+  {label:"Jaune", hex:"#eab308"}, {label:"Orange", hex:"#ea580c"}, {label:"Violet", hex:"#7c3aed"},
+  {label:"Rose", hex:"#db2777"}, {label:"Noir", hex:"#111827"}, {label:"Blanc", hex:"#f8fafc"},
+  {label:"Gris", hex:"#6b7280"}, {label:"Marron", hex:"#78350f"}, {label:"Turquoise", hex:"#0891b2"}
+];
 
 /* ===================== ETAT ===================== */
 let DB = loadDB();
@@ -265,6 +282,40 @@ function teamName(cs, id){
   const e = cs.equipes.find(e=>e.id===id);
   return e ? e.nom : "?";
 }
+function teamColorDot(cs, id){
+  const e = cs.equipes.find(x=>x.id===id);
+  if(!e || !e.couleur) return "";
+  return '<span class="color-dot" style="background:'+e.couleur+'"></span>';
+}
+function setTeamColor(catKey, teamId, hex){
+  const t = currentTournament();
+  if(!t) return;
+  const cs = t.categories[catKey];
+  const team = cs.equipes.find(e=>e.id===teamId);
+  if(!team) return;
+  team.couleur = hex || "";
+  saveDB(); render();
+}
+function handleColorSelect(selectEl, catKey, teamId){
+  const val = selectEl.value;
+  if(val==="custom"){
+    const input = selectEl.nextElementSibling;
+    if(input){ input.style.display = "inline-block"; input.focus(); }
+    return;
+  }
+  setTeamColor(catKey, teamId, val);
+}
+function colorCellHtml(catKey, team){
+  const current = team.couleur || "";
+  const isPreset = COLOR_PRESETS.some(c=>c.hex===current);
+  const selectVal = current ? (isPreset ? current : "custom") : "";
+  const options = '<option value="">— Aucune —</option>'
+    + COLOR_PRESETS.map(c=>'<option value="'+c.hex+'" '+(selectVal===c.hex?"selected":"")+'>'+c.label+'</option>').join("")
+    + '<option value="custom" '+(selectVal==="custom"?"selected":"")+'>Personnalisée…</option>';
+  const dot = '<span class="color-dot" style="background:'+(current||"#e5e7eb")+'"></span>';
+  const customInput = '<input type="color" value="'+(current||"#ffffff")+'" style="'+(selectVal==="custom"?"":"display:none;")+'vertical-align:middle;" onchange="setTeamColor(\''+catKey+'\',\''+team.id+'\',this.value)">';
+  return dot + '<select onchange="handleColorSelect(this,\''+catKey+'\',\''+team.id+'\')">'+options+'</select> ' + customInput;
+}
 function findMatch(id){
   const t = currentTournament();
   if(!t) return {};
@@ -291,6 +342,7 @@ function createCategoryState(){
   return {
     equipes:[], poules:[], poolCount:1, matchDuration:10,
     rankingOptions:{ cl34:true, clDernier:true, cl3e:true },
+    finalMode:"crossed",
     matches:[], refereeCounts:{}, stage:"setup"
   };
 }
@@ -378,8 +430,8 @@ function addEstablishment(schoolName){
   if(!t.etablissements[schoolName]) t.etablissements[schoolName] = {};
   saveDB(); render();
   const idx = Object.keys(t.etablissements).indexOf(schoolName);
-  const firstCat = CATEGORIES_BY_TYPE[t.type][0].key;
-  const el = document.getElementById("estabInput_"+idx+"_"+firstCat);
+  const activeCat = uiState.categoryKey || CATEGORIES_BY_TYPE[t.type][0].key;
+  const el = document.getElementById("estabInput_"+idx+"_"+activeCat);
   if(el) el.focus();
 }
 function removeEstablishment(schoolName){
@@ -541,6 +593,19 @@ function winnerOf(m){
 }
 function loserOf(m){ const w = winnerOf(m); return w===m.teamA ? m.teamB : m.teamA; }
 
+function setFinalMode(cat, mode){
+  const t = currentTournament(); const cs = t.categories[cat];
+  const hasFinalMatches = cs.matches.some(m=>m.phase!=="poule");
+  if(hasFinalMatches){
+    if(!confirm("Changer le mode de phase finale réinitialisera les matchs de phase finale déjà générés. Continuer ?")){ render(); return; }
+    cs.matches = cs.matches.filter(m=>m.phase==="poule");
+    cs.stage = "poules";
+  }
+  cs.finalMode = mode;
+  saveDB();
+  maybeGenerateFinalPhase(cat);
+  render();
+}
 function maybeGenerateFinalPhase(catKey){
   const t = currentTournament(); const cs = t.categories[catKey];
   if(cs.poolCount!==2){
@@ -549,6 +614,23 @@ function maybeGenerateFinalPhase(catKey){
   }
   const pouleMatches = cs.matches.filter(m=>m.phase==="poule");
   const pouleDone = pouleMatches.length>0 && pouleMatches.every(m=>m.status==="done");
+  if(cs.finalMode==="sameRank"){
+    const hasRang = cs.matches.some(m=>typeof m.phase==="string" && m.phase.indexOf("rang")===0);
+    if(pouleDone && !hasRang){
+      const s0 = poolStandings(cs,0), s1 = poolStandings(cs,1);
+      const n = Math.min(s0.length, s1.length);
+      const extra = [];
+      for(let i=0;i<n;i++) extra.push(newMatch("rang"+(i+1), null, s0[i].id, s1[i].id));
+      assignRefereesInOrder(cs, extra);
+      cs.matches.push(...extra);
+      cs.stage = "finale";
+    }
+    if(cs.matches.length && cs.matches.every(m=>m.status==="done") && cs.matches.some(m=>typeof m.phase==="string" && m.phase.indexOf("rang")===0)){
+      cs.stage = "terminé";
+    }
+    saveDB();
+    return;
+  }
   const hasDemis = cs.matches.some(m=>m.phase==="demi1");
   if(pouleDone && !hasDemis){
     const s0 = poolStandings(cs,0), s1 = poolStandings(cs,1);
@@ -654,6 +736,34 @@ function abandonMatch(id, slot){
   maybeGenerateFinalPhase(catKey);
   render();
 }
+function cascadeRemoveDependents(cs, m){
+  if(m.phase==="poule"){
+    if(cs.matches.some(x=>x.phase!=="poule")){
+      cs.matches = cs.matches.filter(x=>x.phase==="poule");
+      cs.stage = "poules";
+    }
+  } else if(m.phase==="demi1" || m.phase==="demi2"){
+    if(cs.matches.some(x=>x.phase==="finale" || x.phase==="cl34")){
+      cs.matches = cs.matches.filter(x=>x.phase!=="finale" && x.phase!=="cl34");
+      cs.stage = "demis";
+    }
+  } else if(cs.stage==="terminé"){
+    cs.stage = "finale";
+  }
+}
+function reopenMatch(id){
+  const {cs, m} = findMatch(id);
+  if(!m) return;
+  const live = liveMatchGlobal();
+  if(live && live.m.id!==id){ alert("Un match est déjà en cours. Terminez-le avant de corriger un autre match."); return; }
+  if(!confirm("Rouvrir ce match pour le corriger ? Les matchs de phase finale déjà générés à partir de ce résultat seront supprimés et devront être régénérés.")) return;
+  cascadeRemoveDependents(cs, m);
+  m.status = "live";
+  m.resultType = null;
+  m.shootoutWinner = null;
+  m.timer = { running:true, startedAt: nowSec(), accumulatedSec:0 };
+  saveDB(); render();
+}
 
 /* ===================== SAUVEGARDE / RESTAURATION ===================== */
 function exportBackup(){
@@ -715,8 +825,18 @@ function resultBadgeText(cs, m){
   if(m.resultType==="normal") return esc(teamName(cs, winnerOf(m))) + " vainqueur";
   return "Terminé";
 }
+function matchWinnerId(m){
+  if(m.status!=="done") return null;
+  if(m.resultType==="abandonA") return m.teamB;
+  if(m.resultType==="abandonB") return m.teamA;
+  if(m.scoreA>m.scoreB) return m.teamA;
+  if(m.scoreB>m.scoreA) return m.teamB;
+  if(m.resultType==="nul" && m.shootoutWinner) return m.shootoutWinner;
+  return null;
+}
 function renderMatchRow(cs, m, canStart){
   const refName = m.refereeTeamId ? esc(teamName(cs,m.refereeTeamId)) : "—";
+  const winnerId = matchWinnerId(m);
   const scoreHtml = m.status==="pending"
     ? '<span class="vs">vs</span>'
     : '<span class="score-chip">'+m.scoreA+' - '+m.scoreB+'</span>';
@@ -726,12 +846,16 @@ function renderMatchRow(cs, m, canStart){
   } else if(m.status==="live" || m.status==="needs_tiebreak"){
     actions = '<button class="btn small" data-action="scroll-live">⬆ Voir le match en cours</button>';
   } else {
-    actions = '<span class="status-pill done">'+esc(resultBadgeText(cs,m))+'</span>';
+    const badge = m.resultType!=="normal" ? '<span class="status-pill done">'+esc(resultBadgeText(cs,m))+'</span>' : '';
+    actions = badge + ' <button class="btn small ghost" style="color:#334155;background:#eef1fb" data-action="reopen-match" data-id="'+m.id+'" '+(canStart?"":"disabled")+' title="Corriger ce match">↺ Corriger</button>';
   }
   return '<div class="match-row">'
     + '<span class="status-pill '+m.status+'">'+statusLabel(m)+'</span>'
-    + '<span class="teams">'+esc(teamName(cs,m.teamA))+' <span class="vs">vs</span> '+esc(teamName(cs,m.teamB))+'</span>'
-    + scoreHtml
+    + '<span class="teams">'
+    +   '<span class="'+(winnerId===m.teamA?"winner":"")+'">'+teamColorDot(cs,m.teamA)+esc(teamName(cs,m.teamA))+'</span> '
+    +   scoreHtml
+    +   ' <span class="'+(winnerId===m.teamB?"winner":"")+'">'+teamColorDot(cs,m.teamB)+esc(teamName(cs,m.teamB))+'</span>'
+    + '</span>'
     + '<span class="ref">🧑‍⚖️ Arbitrage : '+refName+'</span>'
     + '<span style="flex:0 0 auto">'+actions+'</span>'
     + '</div>';
@@ -744,21 +868,21 @@ function renderLiveBanner(){
   const catLabel = CATEGORIES_BY_TYPE[t.type].find(c=>c.key===catKey).label;
   let body;
   if(m.status==="needs_tiebreak"){
-    body = '<div class="live-main"><div class="team-score-btn"><div class="tname">'+esc(teamName(cs,m.teamA))+'</div><div class="tscore">'+m.scoreA+'</div></div>'
-      + '<div style="font-weight:800;font-size:1.1rem;">MATCH NUL</div>'
-      + '<div class="team-score-btn"><div class="tname">'+esc(teamName(cs,m.teamB))+'</div><div class="tscore">'+m.scoreB+'</div></div></div>'
+    body = '<div class="live-main"><div class="team-score-btn"><div class="tname">'+teamColorDot(cs,m.teamA)+esc(teamName(cs,m.teamA))+'</div><div class="tscore">'+m.scoreA+'</div></div>'
+      + '<div style="font-weight:800;font-size:1.4rem;">MATCH NUL</div>'
+      + '<div class="team-score-btn"><div class="tname">'+teamColorDot(cs,m.teamB)+esc(teamName(cs,m.teamB))+'</div><div class="tscore">'+m.scoreB+'</div></div></div>'
       + '<div class="tiebreak-box"><div>Qui est qualifié aux tirs au but ?</div>'
       + '<button class="btn accent" data-action="shootout" data-id="'+m.id+'" data-team="A">🏅 '+esc(teamName(cs,m.teamA))+'</button>'
       + '<button class="btn accent" data-action="shootout" data-id="'+m.id+'" data-team="B">🏅 '+esc(teamName(cs,m.teamB))+'</button></div>';
   } else {
     body = '<div class="live-main">'
       + '<div class="team-score-btn" data-action="goal-plus" data-id="'+m.id+'" data-team="A">'
-      +   '<div class="tname">'+esc(teamName(cs,m.teamA))+'</div><div class="tscore">'+m.scoreA+'</div>'
+      +   '<div class="tname">'+teamColorDot(cs,m.teamA)+esc(teamName(cs,m.teamA))+'</div><div class="tscore">'+m.scoreA+'</div>'
       +   '<button class="minus-btn" data-action="goal-minus" data-id="'+m.id+'" data-team="A">-1</button></div>'
       + '<div><div id="chronoDisplay">'+formatRemaining(cs,m)+'</div>'
       +   '<div class="live-sub">Durée réglée : '+cs.matchDuration+' min · Arbitrage : '+(m.refereeTeamId?esc(teamName(cs,m.refereeTeamId)):"—")+'</div></div>'
       + '<div class="team-score-btn" data-action="goal-plus" data-id="'+m.id+'" data-team="B">'
-      +   '<div class="tname">'+esc(teamName(cs,m.teamB))+'</div><div class="tscore">'+m.scoreB+'</div>'
+      +   '<div class="tname">'+teamColorDot(cs,m.teamB)+esc(teamName(cs,m.teamB))+'</div><div class="tscore">'+m.scoreB+'</div>'
       +   '<button class="minus-btn" data-action="goal-minus" data-id="'+m.id+'" data-team="B">-1</button></div>'
       + '</div>'
       + '<div class="live-controls">'
@@ -766,46 +890,52 @@ function renderLiveBanner(){
           ? '<button class="btn" data-action="pause-match" data-id="'+m.id+'">⏸ Pause</button>'
           : '<button class="btn" data-action="resume-match" data-id="'+m.id+'">▶ Reprendre</button>')
       + '<button class="btn accent" data-action="finish-match" data-id="'+m.id+'">🏁 Terminer le match</button>'
-      + '<button class="btn danger" data-action="abandon-match" data-id="'+m.id+'" data-team="A">🚩 Abandon '+esc(teamName(cs,m.teamA))+'</button>'
-      + '<button class="btn danger" data-action="abandon-match" data-id="'+m.id+'" data-team="B">🚩 Abandon '+esc(teamName(cs,m.teamB))+'</button>'
+      + '</div>'
+      + '<div class="live-abandon-link">En cas d\'abandon : '
+      + '<button class="link-btn" data-action="abandon-match" data-id="'+m.id+'" data-team="A">'+esc(teamName(cs,m.teamA))+'</button>'
+      + ' · <button class="link-btn" data-action="abandon-match" data-id="'+m.id+'" data-team="B">'+esc(teamName(cs,m.teamB))+'</button>'
       + '</div>';
   }
   return '<div id="liveBanner"><div class="label">Match en cours — '+esc(catLabel)+' — '+PHASE_LABEL_OR_POULE(cs,m)+'</div>'+body+'</div>';
 }
+function rangLabel(phase){
+  const n = parseInt(phase.replace("rang",""),10);
+  const first = 2*(n-1)+1, second = first+1;
+  return n===1 ? "Finale — 1ers de poule (places "+first+"-"+second+")" : "Classement — places "+first+"-"+second;
+}
 function PHASE_LABEL_OR_POULE(cs,m){
   if(m.phase==="poule") return "Poule " + String.fromCharCode(65+m.poolIndex);
+  if(typeof m.phase==="string" && m.phase.indexOf("rang")===0) return rangLabel(m.phase);
   return PHASE_LABELS[m.phase] || m.phase;
 }
 
-function renderEstablishmentConfig(t){
-  const catDefs = CATEGORIES_BY_TYPE[t.type];
+function renderEstablishmentConfig(t, catKey){
+  const def = CATEGORIES_BY_TYPE[t.type].find(d=>d.key===catKey) || CATEGORIES_BY_TYPE[t.type][0];
   const active = Object.keys(t.etablissements||{});
   const remaining = ESTABLISHMENTS.filter(e=>!active.includes(e));
   let rows = active.map((estab,idx)=>{
     const vals = t.etablissements[estab] || {};
-    const cells = catDefs.map((def,i)=>{
-      const v = vals[def.key];
-      const display = v ? v : "";
-      return '<td class="col-'+((i+1)%8)+'"><input type="number" min="0" max="20" value="'+display+'" placeholder="0"'
-        + ' id="estabInput_'+idx+'_'+def.key+'" data-estab-input'
-        + ' onchange="updateCount(\''+estab+'\',\''+def.key+'\',this.value)"'
-        + ' onkeydown="handleEstabKeydown(event,\''+estab+'\',\''+def.key+'\','+idx+')"></td>';
-    }).join("");
-    return '<tr><td class="col-0">'+esc(estab)
-      + ' <button class="btn small danger" data-action="remove-estab" data-estab="'+esc(estab)+'" title="Retirer cet établissement">✕</button></td>'
-      + cells + '</tr>';
+    const v = vals[def.key];
+    const display = v ? v : "";
+    const cell = '<td class="col-1"><input type="number" min="0" max="20" value="'+display+'" placeholder="0"'
+      + ' id="estabInput_'+idx+'_'+def.key+'" data-estab-input'
+      + ' onchange="updateCount(\''+estab+'\',\''+def.key+'\',this.value)"'
+      + ' onkeydown="handleEstabKeydown(event,\''+estab+'\',\''+def.key+'\','+idx+')">'
+      + ' <button class="btn small danger" style="padding:2px 7px;font-size:.68rem;" data-action="remove-estab" data-estab="'+esc(estab)+'" title="Retirer cet établissement">✕</button></td>';
+    return '<tr><td class="col-0">'+esc(estab)+'</td>'
+      + cell + '</tr>';
   }).join("");
   if(remaining.length){
     const idx = active.length;
     const options = '<option value="">— Choisir un établissement —</option>'
       + remaining.map(e=>'<option value="'+esc(e)+'">'+esc(e)+'</option>').join("");
     rows += '<tr><td class="col-0"><select id="estabSelect_'+idx+'" onchange="addEstablishment(this.value)">'+options+'</select></td>'
-      + catDefs.map((d,i)=>'<td class="col-'+((i+1)%8)+'"></td>').join("") + '</tr>';
+      + '<td class="col-1"></td></tr>';
   }
-  const header = '<tr><th class="col-0">Établissement</th>' + catDefs.map((d,i)=>'<th class="col-'+((i+1)%8)+'">'+esc(d.label)+'</th>').join("") + '</tr>';
+  const header = '<tr><th class="col-0">Établissement</th><th class="col-1">'+esc(def.label)+'</th></tr>';
   const collapsed = isCollapsed("estab");
   return '<div class="card">'
-    + '<h2 class="collapsible-title" data-action="toggle-section" data-section="estab">🏫 Établissements &amp; équipes engagées <span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>'
+    + '<h2 class="collapsible-title" data-action="toggle-section" data-section="estab">🏫 Établissements &amp; équipes engagées — '+esc(def.label)+' <span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>'
     + (!collapsed ? ('<div class="table-wrap"><table class="estab-table">'+header+rows+'</table></div>'
         + '<p style="font-size:.8rem;color:var(--muted);margin-top:8px;">Choisissez un établissement dans la liste déroulante pour l\'ajouter, puis saisissez le nombre d\'équipes engagées (cellule vide = 0 équipe). Appuyez sur Entrée pour passer à la ligne suivante.</p>') : '')
     + '</div>';
@@ -820,20 +950,33 @@ function renderCategoryConfig(t, catKey, cs){
     warn = '<div class="warn-pill">⚠ Configuration à finaliser : répartissez les équipes en poules puis générez le calendrier.</div>';
   }
   let poolAssignHtml = "";
-  if(cs.poolCount>=2 && cs.equipes.length){
+  if(cs.equipes.length){
+    const showPool = cs.poolCount>=2;
     const rows = cs.equipes.map(e=>{
-      let currentPool = -1;
-      cs.poules.forEach((p,i)=>{ if(p.includes(e.id)) currentPool=i; });
-      let options = '<option value="-1">— Non affectée —</option>';
-      for(let i=0;i<cs.poolCount;i++){
-        options += '<option value="'+i+'" '+(currentPool===i?"selected":"")+'>Poule '+String.fromCharCode(65+i)+'</option>';
+      let poolCell = "";
+      if(showPool){
+        let currentPool = -1;
+        cs.poules.forEach((p,i)=>{ if(p.includes(e.id)) currentPool=i; });
+        let options = '<option value="-1">— Non affectée —</option>';
+        for(let i=0;i<cs.poolCount;i++){
+          options += '<option value="'+i+'" '+(currentPool===i?"selected":"")+'>Poule '+String.fromCharCode(65+i)+'</option>';
+        }
+        poolCell = '<td><select onchange="assignPoule(\''+catKey+'\',\''+e.id+'\',this.value)">'+options+'</select></td>';
       }
-      return '<tr><td>'+esc(e.nom)+'</td><td><select onchange="assignPoule(\''+catKey+'\',\''+e.id+'\',this.value)">'+options+'</select></td></tr>';
+      return '<tr><td>'+esc(e.nom)+'</td><td>'+colorCellHtml(catKey,e)+'</td>'+poolCell+'</tr>';
     }).join("");
-    poolAssignHtml = '<table class="pool-config-table"><tr><th>Équipe</th><th>Poule</th></tr>'+rows+'</table>'
-      + '<button class="btn small" data-action="auto-split" data-cat="'+catKey+'" style="margin-top:8px;">🔀 Répartir automatiquement</button>';
+    poolAssignHtml = '<table class="pool-config-table"><tr><th>Équipe</th><th>Couleur</th>'+(showPool?"<th>Poule</th>":"")+'</tr>'+rows+'</table>'
+      + (showPool ? '<button class="btn small" data-action="auto-split" data-cat="'+catKey+'" style="margin-top:8px;">🔀 Répartir automatiquement</button>' : '');
   }
-  const rankOpts = cs.poolCount===2 ? (
+  const finalModeHtml = cs.poolCount===2 ? (
+    '<div class="field-row">'
+    + '<div class="field"><label>Mode de phase finale</label><select onchange="setFinalMode(\''+catKey+'\',this.value)">'
+    + '<option value="crossed" '+(cs.finalMode!=="sameRank"?"selected":"")+'>Demi-finales croisées (1er vs 2e, finale, classements)</option>'
+    + '<option value="sameRank" '+(cs.finalMode==="sameRank"?"selected":"")+'>Même rang (1er vs 1er, 2e vs 2e, …)</option>'
+    + '</select></div>'
+    + '</div>'
+  ) : "";
+  const rankOpts = (cs.poolCount===2 && cs.finalMode!=="sameRank") ? (
     '<div class="field-row">'
     + '<label class="checkline"><input type="checkbox" '+(cs.rankingOptions.cl34?"checked":"")+' onchange="toggleRankOpt(\''+catKey+'\',\'cl34\',this.checked)"> Match de classement 3e/4e place</label>'
     + '<label class="checkline"><input type="checkbox" '+(cs.rankingOptions.clDernier?"checked":"")+' onchange="toggleRankOpt(\''+catKey+'\',\'clDernier\',this.checked)"> Classement des dernières places</label>'
@@ -852,6 +995,7 @@ function renderCategoryConfig(t, catKey, cs){
       + '<div class="field"><label>&nbsp;</label><button class="btn accent" data-action="gen-schedule" data-cat="'+catKey+'">📅 '+(cs.matches.length?"Régénérer":"Générer")+' le calendrier</button></div>'
       + '<div class="field"><label>&nbsp;</label><button class="btn ghost" style="color:#334155;background:#eef1fb" data-action="reset-category" data-cat="'+catKey+'">↺ Réinitialiser</button></div>'
       + '</div>'
+      + finalModeHtml
       + rankOpts
       + poolAssignHtml) : '')
     + '</div>';
@@ -869,12 +1013,15 @@ function renderMatches(t, catKey, cs){
   const order = [];
   for(let i=0;i<cs.poolCount;i++) if(byPhase["poule"+i]) order.push("poule"+i);
   ["demi1","demi2","clDernier","cl3e","finale","cl34"].forEach(k=>{ if(byPhase[k]) order.push(k); });
+  Object.keys(byPhase).filter(k=>k.indexOf("rang")===0)
+    .sort((a,b)=>parseInt(a.replace("rang",""),10)-parseInt(b.replace("rang",""),10))
+    .forEach(k=>order.push(k));
   const collapsed = isCollapsed(catKey+"_matches");
   let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_matches"><span>📋 Calendrier des matchs</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
   if(!collapsed){
     order.forEach(key=>{
       const list = byPhase[key];
-      const title = key.startsWith("poule") ? "Poule " + String.fromCharCode(65+parseInt(key.replace("poule",""),10)) : PHASE_LABELS[key];
+      const title = key.startsWith("poule") ? "Poule " + String.fromCharCode(65+parseInt(key.replace("poule",""),10)) : (key.indexOf("rang")===0 ? rangLabel(key) : PHASE_LABELS[key]);
       html += '<div class="phase-group"><div class="phase-title">🏐 '+title+'</div><div class="match-list">'
         + list.map(m=> renderMatchRow(cs, m, !hasLive)).join("")
         + '</div></div>';
@@ -886,16 +1033,17 @@ function renderMatches(t, catKey, cs){
 
 function renderStandings(t, catKey, cs){
   const collapsed = isCollapsed(catKey+"_standings");
-  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_standings"><span>📊 Classement général — '+esc(CATEGORIES_BY_TYPE[t.type].find(c=>c.key===catKey).label)+'</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
+  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_standings"><span>📊 Classement — '+esc(CATEGORIES_BY_TYPE[t.type].find(c=>c.key===catKey).label)+'</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
   if(!collapsed){
-    html += standingsTable(cs, overallStandings(cs), "Toutes rencontres confondues (poules + phases finales)");
-    if(cs.poolCount===2 && cs.poules.some(p=>p.length)){
+    if(cs.poolCount>1 && cs.poules.some(p=>p.length)){
       html += '<div class="standings-row">';
       cs.poules.forEach((p,i)=>{
         if(!p.length) return;
         html += '<div>'+standingsTable(cs, poolStandings(cs,i), "Poule "+String.fromCharCode(65+i))+'</div>';
       });
       html += '</div>';
+    } else {
+      html += standingsTable(cs, overallStandings(cs), "Classement");
     }
   }
   html += '</div>';
@@ -911,7 +1059,7 @@ function renderTournamentBody(tab, t){
   const catDefs = CATEGORIES_BY_TYPE[t.type];
   if(!uiState.categoryKey || !t.categories[uiState.categoryKey]) uiState.categoryKey = catDefs[0].key;
   let html = renderLiveBanner();
-  html += renderEstablishmentConfig(t);
+  html += renderEstablishmentConfig(t, uiState.categoryKey);
   html += renderCategoryView(t, uiState.categoryKey);
   return html;
 }
@@ -1001,6 +1149,7 @@ document.body.addEventListener("click", e=>{
     case "reset-category": resetCategory(el.dataset.cat); break;
     case "remove-estab": removeEstablishment(el.dataset.estab); break;
     case "start-match": startMatch(el.dataset.id); break;
+    case "reopen-match": reopenMatch(el.dataset.id); break;
     case "pause-match": pauseMatch(el.dataset.id); break;
     case "resume-match": resumeMatch(el.dataset.id); break;
     case "goal-plus": addGoal(el.dataset.id, el.dataset.team, 1); break;
