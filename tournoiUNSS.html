@@ -286,7 +286,7 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 </header>
 <nav class="main-tabs">
   <button id="tabBtnM" data-action="switch-tab" data-tab="M">⚽ Futsal</button>
-  <button id="tabBtnF" data-action="switch-tab" data-tab="F">🎀 Futsal Féminin</button>
+  <button id="tabBtnF" data-action="switch-tab" data-tab="F">⚽ Futsal Féminin</button>
 </nav>
 <nav id="catTabsBar" class="hidden"></nav>
 <main id="app"></main>
@@ -303,7 +303,7 @@ const PHASE_LABELS = {
   cl34:"Match pour la 3e place", clDernier:"Classement des dernières places",
   cl3e:"Classement des 3e de poule"
 };
-const STORAGE_KEY = "unssFutsalV1";
+const STORAGE_KEY = "unssFutsalV2";
 const COLOR_PRESETS = [
   {label:"Rouge", hex:"#dc2626"}, {label:"Bleu", hex:"#2563eb"}, {label:"Vert", hex:"#16a34a"},
   {label:"Jaune", hex:"#eab308"}, {label:"Orange", hex:"#ea580c"}, {label:"Violet", hex:"#7c3aed"},
@@ -313,19 +313,93 @@ const COLOR_PRESETS = [
 
 /* ===================== ETAT ===================== */
 let DB = loadDB();
-let uiState = { creating:false, categoryKey:null, collapsedSections:{} };
+let uiState = { creating:false, collapsedSections:{} };
 function isCollapsed(key){ return !!uiState.collapsedSections[key]; }
 function toggleSection(key){ uiState.collapsedSections[key] = !uiState.collapsedSections[key]; render(); }
 
+function emptyCatCtx(){ return { tournaments:[], currentId:null }; }
+function freshDB(){
+  return {
+    activeTab:"M",
+    activeCategory:{ M:"benjamins", F:"benjamines" },
+    M:{ benjamins:emptyCatCtx(), minimesG:emptyCatCtx() },
+    F:{ benjamines:emptyCatCtx(), minimesF:emptyCatCtx() }
+  };
+}
+function isNewFormat(d){
+  return !!(d && d.M && d.F && d.M.benjamins && d.M.minimesG && d.F.benjamines && d.F.minimesF);
+}
+function migrateOldTournament(oldT, catKey){
+  const oldCs = oldT.categories ? oldT.categories[catKey] : null;
+  if(!oldCs) return null;
+  const estabCounts = {};
+  Object.keys(oldT.etablissements||{}).forEach(estab=>{
+    const n = oldT.etablissements[estab] && oldT.etablissements[estab][catKey];
+    if(n) estabCounts[estab] = n;
+  });
+  return {
+    id: oldT.id + "_" + catKey,
+    nom: oldT.nom,
+    dateCreation: oldT.dateCreation,
+    gender: oldT.type,
+    category: catKey,
+    etablissements: estabCounts,
+    equipes: oldCs.equipes || [],
+    poules: oldCs.poules || [],
+    poolCount: oldCs.poolCount || 1,
+    matchDuration: oldCs.matchDuration!=null ? oldCs.matchDuration : 10,
+    poolDurations: oldCs.poolDurations || [],
+    poolDoubleRound: oldCs.poolDoubleRound || [],
+    rankingOptions: oldCs.rankingOptions || { cl34:true, clDernier:true, cl3e:true },
+    finalMode: oldCs.finalMode || "crossed",
+    matches: oldCs.matches || [],
+    refereeCounts: oldCs.refereeCounts || {},
+    stage: oldCs.stage || "setup"
+  };
+}
+function migrateOldDB(old){
+  const next = freshDB();
+  next.activeTab = old.activeTab || "M";
+  ["M","F"].forEach(tab=>{
+    const catDefs = CATEGORIES_BY_TYPE[tab];
+    const ctx = old[tab];
+    catDefs.forEach(def=>{
+      const list = [];
+      let currentMigratedId = null;
+      if(ctx && Array.isArray(ctx.tournaments)){
+        ctx.tournaments.forEach(oldT=>{
+          const migrated = migrateOldTournament(oldT, def.key);
+          if(migrated && (migrated.equipes.length || Object.keys(migrated.etablissements).length)){
+            list.push(migrated);
+            if(oldT.id === ctx.currentId) currentMigratedId = migrated.id;
+          }
+        });
+      }
+      next[tab][def.key].tournaments = list;
+      next[tab][def.key].currentId = currentMigratedId || (list.length ? list[list.length-1].id : null);
+    });
+    next.activeCategory[tab] = catDefs[0].key;
+  });
+  return next;
+}
 function loadDB(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw){
       const parsed = JSON.parse(raw);
-      if(parsed && parsed.M && parsed.F) return parsed;
+      if(isNewFormat(parsed)) return parsed;
+    }
+    const oldRaw = localStorage.getItem("unssFutsalV1");
+    if(oldRaw){
+      const oldParsed = JSON.parse(oldRaw);
+      if(oldParsed && oldParsed.M && oldParsed.F){
+        const migrated = migrateOldDB(oldParsed);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        return migrated;
+      }
     }
   }catch(e){ console.warn("Lecture sauvegarde impossible", e); }
-  return { activeTab:"M", M:{tournaments:[], currentId:null}, F:{tournaments:[], currentId:null} };
+  return freshDB();
 }
 function saveDB(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }
 
@@ -338,7 +412,9 @@ function esc(str){
 function teamIdFor(estab, cat, n){ return btoa(unescape(encodeURIComponent(estab))).replace(/[^A-Za-z0-9]/g,"") + "_" + cat + "_" + n; }
 
 function currentTournament(){
-  const ctx = DB[DB.activeTab];
+  const tab = DB.activeTab;
+  const cat = DB.activeCategory[tab];
+  const ctx = DB[tab][cat];
   return ctx.tournaments.find(t=>t.id===ctx.currentId) || null;
 }
 function teamName(cs, id){
@@ -351,25 +427,24 @@ function teamColorDot(cs, id){
   if(!e || !e.couleur) return "";
   return '<span class="color-dot" style="background:'+e.couleur+'"></span>';
 }
-function setTeamColor(catKey, teamId, hex){
+function setTeamColor(teamId, hex){
   const t = currentTournament();
   if(!t) return;
-  const cs = t.categories[catKey];
-  const team = cs.equipes.find(e=>e.id===teamId);
+  const team = t.equipes.find(e=>e.id===teamId);
   if(!team) return;
   team.couleur = hex || "";
   saveDB(); render();
 }
-function handleColorSelect(selectEl, catKey, teamId){
+function handleColorSelect(selectEl, teamId){
   const val = selectEl.value;
   if(val==="custom"){
     const input = selectEl.nextElementSibling;
     if(input){ input.style.display = "inline-block"; input.focus(); }
     return;
   }
-  setTeamColor(catKey, teamId, val);
+  setTeamColor(teamId, val);
 }
-function colorCellHtml(catKey, team){
+function colorCellHtml(team){
   const current = team.couleur || "";
   const isPreset = COLOR_PRESETS.some(c=>c.hex===current);
   const selectVal = current ? (isPreset ? current : "custom") : "";
@@ -377,33 +452,30 @@ function colorCellHtml(catKey, team){
     + COLOR_PRESETS.map(c=>'<option value="'+c.hex+'" '+(selectVal===c.hex?"selected":"")+'>'+c.label+'</option>').join("")
     + '<option value="custom" '+(selectVal==="custom"?"selected":"")+'>Personnalisée…</option>';
   const dot = '<span class="color-dot" style="background:'+(current||"#e5e7eb")+'"></span>';
-  const customInput = '<input type="color" value="'+(current||"#ffffff")+'" style="'+(selectVal==="custom"?"":"display:none;")+'vertical-align:middle;" onchange="setTeamColor(\''+catKey+'\',\''+team.id+'\',this.value)">';
-  return dot + '<select onchange="handleColorSelect(this,\''+catKey+'\',\''+team.id+'\')">'+options+'</select> ' + customInput;
+  const customInput = '<input type="color" value="'+(current||"#ffffff")+'" style="'+(selectVal==="custom"?"":"display:none;")+'vertical-align:middle;" onchange="setTeamColor(\''+team.id+'\',this.value)">';
+  return dot + '<select onchange="handleColorSelect(this,\''+team.id+'\')">'+options+'</select> ' + customInput;
 }
 function findMatch(id){
   const t = currentTournament();
   if(!t) return {};
-  for(const catKey in t.categories){
-    const cs = t.categories[catKey];
-    const m = cs.matches.find(x=>x.id===id);
-    if(m) return {catKey, cs, m};
-  }
-  return {};
+  const m = t.matches.find(x=>x.id===id);
+  return m ? {cs:t, m} : {};
 }
 function liveMatchGlobal(){
   const t = currentTournament();
   if(!t) return null;
-  for(const catKey in t.categories){
-    const cs = t.categories[catKey];
-    const m = cs.matches.find(x=>x.status==="live" || x.status==="needs_tiebreak");
-    if(m) return {catKey, cs, m};
-  }
-  return null;
+  const m = t.matches.find(x=>x.status==="live" || x.status==="needs_tiebreak");
+  return m ? {cs:t, m} : null;
 }
 
 /* ===================== MODELE ===================== */
-function createCategoryState(){
+function createTournamentData(gender, category, nom){
   return {
+    id: uid(),
+    nom: nom && nom.trim() ? nom.trim() : ("Tournoi du " + new Date().toLocaleDateString("fr-FR")),
+    dateCreation: new Date().toISOString(),
+    gender, category,
+    etablissements:{},
     equipes:[], poules:[], poolCount:1, matchDuration:10,
     poolDurations:[], poolDoubleRound:[],
     rankingOptions:{ cl34:true, clDernier:true, cl3e:true },
@@ -411,79 +483,63 @@ function createCategoryState(){
     matches:[], refereeCounts:{}, stage:"setup"
   };
 }
-function createTournament(tab, nom){
-  const type = tab;
-  const catDefs = CATEGORIES_BY_TYPE[type];
-  const categories = {};
-  catDefs.forEach(d=> categories[d.key] = createCategoryState());
-  const t = {
-    id: uid(),
-    nom: nom && nom.trim() ? nom.trim() : ("Tournoi du " + new Date().toLocaleDateString("fr-FR")),
-    type, dateCreation: new Date().toISOString(),
-    etablissements:{}, categories
-  };
-  DB[tab].tournaments.push(t);
-  DB[tab].currentId = t.id;
-  uiState.categoryKey = catDefs[0].key;
+function createTournament(nom){
+  const tab = DB.activeTab; const cat = DB.activeCategory[tab];
+  const t = createTournamentData(tab, cat, nom);
+  DB[tab][cat].tournaments.push(t);
+  DB[tab][cat].currentId = t.id;
   uiState.creating = false;
   saveDB(); render();
 }
-function deleteTournament(tab,id){
+function deleteTournament(id){
+  const tab = DB.activeTab; const cat = DB.activeCategory[tab];
   if(!confirm("Supprimer définitivement ce tournoi et tous ses résultats ?")) return;
-  DB[tab].tournaments = DB[tab].tournaments.filter(t=>t.id!==id);
-  if(DB[tab].currentId===id){
-    const remaining = DB[tab].tournaments;
-    DB[tab].currentId = remaining.length ? remaining[remaining.length-1].id : null;
+  DB[tab][cat].tournaments = DB[tab][cat].tournaments.filter(t=>t.id!==id);
+  if(DB[tab][cat].currentId===id){
+    const remaining = DB[tab][cat].tournaments;
+    DB[tab][cat].currentId = remaining.length ? remaining[remaining.length-1].id : null;
   }
   saveDB(); render();
 }
-function selectTournament(tab,id){
-  DB[tab].currentId = id;
-  const t = DB[tab].tournaments.find(x=>x.id===id);
-  uiState.categoryKey = t ? Object.keys(t.categories)[0] : null;
+function selectTournament(id){
+  const tab = DB.activeTab; const cat = DB.activeCategory[tab];
+  DB[tab][cat].currentId = id;
   saveDB(); render();
 }
 function switchTab(tab){
   DB.activeTab = tab;
-  const ctx = DB[tab];
-  const t = ctx.tournaments.find(x=>x.id===ctx.currentId);
-  uiState.categoryKey = t ? Object.keys(t.categories)[0] : null;
+  uiState.creating = false;
+  saveDB(); render();
+}
+function switchCategory(cat){
+  DB.activeCategory[DB.activeTab] = cat;
   uiState.creating = false;
   saveDB(); render();
 }
 
 function applyEstablishmentConfig(t, newCounts){
   t.etablissements = newCounts;
-  const catDefs = CATEGORIES_BY_TYPE[t.type];
-  catDefs.forEach(def=>{
-    const cat = def.key;
-    const newTeams = [];
-    ESTABLISHMENTS.forEach(estab=>{
-      const n = (newCounts[estab] && newCounts[estab][cat]) || 0;
-      for(let i=1;i<=n;i++){
-        newTeams.push({ id: teamIdFor(estab,cat,i), nom: n>1 ? (estab+" "+i) : estab, etablissement: estab });
-      }
-    });
-    const cs = t.categories[cat];
-    const oldIds = cs.equipes.map(e=>e.id);
-    const newIds = newTeams.map(e=>e.id);
-    const changed = oldIds.length!==newIds.length || oldIds.some(id=>!newIds.includes(id));
-    cs.equipes = newTeams;
-    if(changed){
-      cs.poules = [];
-      cs.matches = [];
-      cs.refereeCounts = {};
-      cs.stage = "setup";
+  const newTeams = [];
+  ESTABLISHMENTS.forEach(estab=>{
+    const n = newCounts[estab] || 0;
+    for(let i=1;i<=n;i++){
+      newTeams.push({ id: teamIdFor(estab,t.category,i), nom: n>1 ? (estab+" "+i) : estab, etablissement: estab });
     }
   });
+  const oldIds = t.equipes.map(e=>e.id);
+  const newIds = newTeams.map(e=>e.id);
+  const changed = oldIds.length!==newIds.length || oldIds.some(id=>!newIds.includes(id));
+  t.equipes = newTeams;
+  if(changed){
+    t.poules = []; t.matches = []; t.refereeCounts = {}; t.stage = "setup";
+  }
 }
-function updateCount(estab, cat, val){
+function updateCount(estab, val){
   const t = currentTournament();
   if(!t) return;
   const n = Math.max(0, Math.min(20, parseInt(val,10)||0));
-  const counts = JSON.parse(JSON.stringify(t.etablissements||{}));
-  if(!counts[estab]) counts[estab] = {};
-  counts[estab][cat] = n;
+  const counts = Object.assign({}, t.etablissements||{});
+  counts[estab] = n;
   applyEstablishmentConfig(t, counts);
   saveDB(); render();
 }
@@ -492,108 +548,96 @@ function addEstablishment(schoolName){
   const t = currentTournament();
   if(!t) return;
   if(!t.etablissements) t.etablissements = {};
-  if(!t.etablissements[schoolName]) t.etablissements[schoolName] = {};
+  if(t.etablissements[schoolName]==null) t.etablissements[schoolName] = 0;
   saveDB(); render();
   const idx = Object.keys(t.etablissements).indexOf(schoolName);
-  const activeCat = uiState.categoryKey || CATEGORIES_BY_TYPE[t.type][0].key;
-  const el = document.getElementById("estabInput_"+idx+"_"+activeCat);
+  const el = document.getElementById("estabInput_"+idx);
   if(el) el.focus();
 }
 function removeEstablishment(schoolName){
   const t = currentTournament();
   if(!t) return;
   if(!confirm("Retirer " + schoolName + " de ce tournoi ? Ses équipes et matchs associés seront supprimés.")) return;
-  const counts = JSON.parse(JSON.stringify(t.etablissements||{}));
+  const counts = Object.assign({}, t.etablissements||{});
   delete counts[schoolName];
   applyEstablishmentConfig(t, counts);
   saveDB(); render();
 }
-function handleEstabKeydown(event, estab, cat, rowIndex){
+function handleEstabKeydown(event, estab, rowIndex){
   if(event.key!=="Enter") return;
   event.preventDefault();
-  updateCount(estab, cat, event.target.value);
-  const nextInput = document.getElementById("estabInput_"+(rowIndex+1)+"_"+cat);
+  updateCount(estab, event.target.value);
+  const nextInput = document.getElementById("estabInput_"+(rowIndex+1));
   if(nextInput){ nextInput.focus(); nextInput.select(); return; }
   const nextSelect = document.getElementById("estabSelect_"+(rowIndex+1));
   if(nextSelect) nextSelect.focus();
 }
-function handlePoolDurationKeydown(event, cat, poolIndex){
+function handlePoolDurationKeydown(event, poolIndex){
   if(event.key!=="Enter") return;
   event.preventDefault();
-  setPoolDuration(cat, poolIndex, event.target.value);
+  setPoolDuration(poolIndex, event.target.value);
   const nextInput = document.getElementById("poolDurInput_"+(poolIndex+1));
   if(nextInput){ nextInput.focus(); nextInput.select(); }
 }
-function resetCategory(cat){
-  if(!confirm("Réinitialiser les poules et le calendrier de cette catégorie ? Les résultats seront perdus.")) return;
-  const t = currentTournament(); const cs = t.categories[cat];
-  cs.poules = []; cs.matches = []; cs.refereeCounts = {}; cs.stage = "setup";
-  saveDB(); render();
-}
-function deleteCategory(cat){
+function resetCategory(){
   const t = currentTournament(); if(!t) return;
-  const def = CATEGORIES_BY_TYPE[t.type].find(d=>d.key===cat);
-  const label = def ? def.label : cat;
-  if(!confirm("Supprimer définitivement toutes les données de la catégorie \""+label+"\" (établissements engagés, équipes, matchs, résultats) ? L'autre catégorie de ce tournoi ne sera pas touchée.")) return;
-  Object.keys(t.etablissements||{}).forEach(estab=>{
-    if(t.etablissements[estab]) delete t.etablissements[estab][cat];
-  });
-  t.categories[cat] = createCategoryState();
+  if(!confirm("Réinitialiser les poules et le calendrier de ce tournoi ? Les résultats seront perdus.")) return;
+  t.poules = []; t.matches = []; t.refereeCounts = {}; t.stage = "setup";
   saveDB(); render();
 }
 
 /* ===================== POULES ===================== */
-function setPoolCount(cat, n){
-  const t = currentTournament(); const cs = t.categories[cat];
+function setPoolCount(n){
+  const t = currentTournament(); if(!t) return;
   n = parseInt(n,10);
-  if(cs.matches.length && !confirm("Changer le nombre de poules réinitialisera le calendrier des matchs de cette catégorie. Continuer ?")) { render(); return; }
-  cs.poolCount = n;
-  cs.poules = Array.from({length:n}, ()=>[]);
-  cs.poolDurations = Array.from({length:n}, (_, i)=> (cs.poolDurations && cs.poolDurations[i]) || cs.matchDuration);
-  cs.poolDoubleRound = Array.from({length:n}, (_, i)=> !!(cs.poolDoubleRound && cs.poolDoubleRound[i]));
-  cs.matches = []; cs.refereeCounts = {}; cs.stage = "setup";
+  if(t.matches.length && !confirm("Changer le nombre de poules réinitialisera le calendrier des matchs de ce tournoi. Continuer ?")) { render(); return; }
+  t.poolCount = n;
+  t.poules = Array.from({length:n}, ()=>[]);
+  t.poolDurations = Array.from({length:n}, (_, i)=> (t.poolDurations && t.poolDurations[i]) || t.matchDuration);
+  t.poolDoubleRound = Array.from({length:n}, (_, i)=> !!(t.poolDoubleRound && t.poolDoubleRound[i]));
+  t.matches = []; t.refereeCounts = {}; t.stage = "setup";
   saveDB(); render();
 }
-function setPoolDuration(cat, poolIndex, val){
-  const t = currentTournament(); const cs = t.categories[cat];
-  if(!cs.poolDurations) cs.poolDurations = [];
-  cs.poolDurations[poolIndex] = Math.max(1, Math.min(90, parseInt(val,10)||10));
+function setPoolDuration(poolIndex, val){
+  const t = currentTournament(); if(!t) return;
+  if(!t.poolDurations) t.poolDurations = [];
+  t.poolDurations[poolIndex] = Math.max(1, Math.min(90, parseInt(val,10)||10));
   saveDB(); render();
 }
-function togglePoolDoubleRound(cat, poolIndex, checked){
-  const t = currentTournament(); const cs = t.categories[cat];
-  if(!cs.poolDoubleRound) cs.poolDoubleRound = [];
-  const hadMatches = cs.matches.length>0;
-  if(hadMatches && !confirm("Changer ce réglage réinitialisera le calendrier des matchs de cette catégorie. Continuer ?")){ render(); return; }
-  cs.poolDoubleRound[poolIndex] = checked;
-  if(hadMatches){ cs.matches = []; cs.refereeCounts = {}; cs.stage = "setup"; }
+function togglePoolDoubleRound(poolIndex, checked){
+  const t = currentTournament(); if(!t) return;
+  if(!t.poolDoubleRound) t.poolDoubleRound = [];
+  const hadMatches = t.matches.length>0;
+  if(hadMatches && !confirm("Changer ce réglage réinitialisera le calendrier des matchs de ce tournoi. Continuer ?")){ render(); return; }
+  t.poolDoubleRound[poolIndex] = checked;
+  if(hadMatches){ t.matches = []; t.refereeCounts = {}; t.stage = "setup"; }
   saveDB(); render();
 }
-function assignPoule(cat, teamId, poolIndexStr){
-  const t = currentTournament(); const cs = t.categories[cat];
-  cs.poules.forEach(p=>{ const i=p.indexOf(teamId); if(i>=0) p.splice(i,1); });
+function assignPoule(teamId, poolIndexStr){
+  const t = currentTournament(); if(!t) return;
+  t.poules.forEach(p=>{ const i=p.indexOf(teamId); if(i>=0) p.splice(i,1); });
   const idx = parseInt(poolIndexStr,10);
-  if(idx>=0) cs.poules[idx].push(teamId);
+  if(idx>=0) t.poules[idx].push(teamId);
   saveDB(); render();
 }
-function autoSplit(cat){
-  const t = currentTournament(); const cs = t.categories[cat];
-  const teams = cs.equipes.slice().sort((a,b)=> a.etablissement.localeCompare(b.etablissement) || a.nom.localeCompare(b.nom));
-  const n = cs.poolCount;
+function autoSplit(){
+  const t = currentTournament(); if(!t) return;
+  const teams = t.equipes.slice().sort((a,b)=> a.etablissement.localeCompare(b.etablissement) || a.nom.localeCompare(b.nom));
+  const n = t.poolCount;
   const pools = Array.from({length:n}, ()=>[]);
   teams.forEach((team,i)=> pools[i%n].push(team.id));
-  cs.poules = pools;
+  t.poules = pools;
   saveDB(); render();
 }
-function toggleRankOpt(cat, key, checked){
-  const t = currentTournament(); const cs = t.categories[cat];
-  cs.rankingOptions[key] = checked;
+function toggleRankOpt(key, checked){
+  const t = currentTournament(); if(!t) return;
+  t.rankingOptions[key] = checked;
   saveDB(); render();
 }
-function setDuration(cat, val){
-  const t = currentTournament(); const cs = t.categories[cat];
-  if(val===""||val==null){ cs.matchDuration = null; }
-  else { cs.matchDuration = Math.max(1, Math.min(90, parseInt(val,10)||10)); }
+function setDuration(val){
+  const t = currentTournament(); if(!t) return;
+  if(val===""||val==null){ t.matchDuration = null; }
+  else { t.matchDuration = Math.max(1, Math.min(90, parseInt(val,10)||10)); }
   saveDB(); render();
 }
 
@@ -690,16 +734,16 @@ function assignRefereesForPoolMatches(cs, matches){
     });
   });
 }
-function genSchedule(cat){
-  const t = currentTournament(); const cs = t.categories[cat];
-  if(cs.poolCount===1) cs.poules = [cs.equipes.map(e=>e.id)];
-  const allAssigned = cs.equipes.every(e=> cs.poules.some(p=>p.includes(e.id)));
-  const poolsOk = cs.poules.length===cs.poolCount && cs.poules.every(p=>p.length>=2);
-  if(!cs.equipes.length){ alert("Aucune équipe configurée pour cette catégorie."); return; }
+function genSchedule(){
+  const t = currentTournament(); if(!t) return;
+  if(t.poolCount===1) t.poules = [t.equipes.map(e=>e.id)];
+  const allAssigned = t.equipes.every(e=> t.poules.some(p=>p.includes(e.id)));
+  const poolsOk = t.poules.length===t.poolCount && t.poules.every(p=>p.length>=2);
+  if(!t.equipes.length){ alert("Aucune équipe configurée pour ce tournoi."); return; }
   if(!allAssigned || !poolsOk){ alert("Merci d'affecter toutes les équipes à une poule (au moins 2 équipes par poule)."); return; }
-  if(cs.matches.length && !confirm("Regénérer le calendrier effacera les résultats existants de cette catégorie. Continuer ?")) return;
-  cs.refereeCounts = {};
-  const poolRounds = cs.poules.map((teamIds,idx)=>roundRobinRounds(teamIds, cs.poolDoubleRound && cs.poolDoubleRound[idx]));
+  if(t.matches.length && !confirm("Regénérer le calendrier effacera les résultats existants. Continuer ?")) return;
+  t.refereeCounts = {};
+  const poolRounds = t.poules.map((teamIds,idx)=>roundRobinRounds(teamIds, t.poolDoubleRound && t.poolDoubleRound[idx]));
   const maxRounds = Math.max(...poolRounds.map(r=>r.length));
   const matches = [];
   for(let r=0;r<maxRounds;r++){
@@ -709,9 +753,9 @@ function genSchedule(cat){
       round.forEach(([a,b]) => matches.push(newMatch("poule", idx, a, b, r)));
     });
   }
-  assignRefereesForPoolMatches(cs, matches);
-  cs.matches = matches;
-  cs.stage = "poules";
+  assignRefereesForPoolMatches(t, matches);
+  t.matches = matches;
+  t.stage = "poules";
   saveDB(); render();
 }
 
@@ -861,17 +905,17 @@ function computeFinalRanking(cs){
   return flat;
 }
 
-function setFinalMode(cat, mode){
-  const t = currentTournament(); const cs = t.categories[cat];
-  const hasFinalMatches = cs.matches.some(m=>m.phase!=="poule");
+function setFinalMode(mode){
+  const t = currentTournament(); if(!t) return;
+  const hasFinalMatches = t.matches.some(m=>m.phase!=="poule");
   if(hasFinalMatches){
     if(!confirm("Changer le mode de phase finale réinitialisera les matchs de phase finale déjà générés. Continuer ?")){ render(); return; }
-    cs.matches = cs.matches.filter(m=>m.phase==="poule");
-    cs.stage = "poules";
+    t.matches = t.matches.filter(m=>m.phase==="poule");
+    t.stage = "poules";
   }
-  cs.finalMode = mode;
+  t.finalMode = mode;
   saveDB();
-  maybeGenerateFinalPhase(cat);
+  maybeGenerateFinalPhase();
   render();
 }
 function generateSameRankPhaseN(cs, pouleDone){
@@ -952,8 +996,9 @@ function generateEliminationBracket(cs, pouleDone){
     }
   }
 }
-function maybeGenerateFinalPhase(catKey){
-  const t = currentTournament(); const cs = t.categories[catKey];
+function maybeGenerateFinalPhase(){
+  const t = currentTournament(); if(!t) return;
+  const cs = t;
   if(cs.poolCount<2){
     if(cs.matches.length && cs.matches.every(m=>m.status==="done")) cs.stage = "terminé";
     saveDB(); return;
@@ -1067,7 +1112,7 @@ function addGoal(id, slot, delta){
   saveDB(); render();
 }
 function finishMatch(id){
-  const {catKey, m} = findMatch(id);
+  const {m} = findMatch(id);
   if(!m) return;
   stopTimer(m);
   if(m.scoreA===m.scoreB && m.phase!=="poule"){
@@ -1077,28 +1122,28 @@ function finishMatch(id){
   m.resultType = m.scoreA===m.scoreB ? "nul" : "normal";
   m.status = "done";
   saveDB();
-  maybeGenerateFinalPhase(catKey);
+  maybeGenerateFinalPhase();
   render();
 }
 function setShootoutWinner(id, team){
-  const {catKey, m} = findMatch(id);
+  const {m} = findMatch(id);
   if(!m) return;
   m.shootoutWinner = team;
   m.resultType = "nul";
   m.status = "done";
   saveDB();
-  maybeGenerateFinalPhase(catKey);
+  maybeGenerateFinalPhase();
   render();
 }
 function abandonMatch(id, slot){
-  const {catKey, m} = findMatch(id);
+  const {m} = findMatch(id);
   if(!m) return;
   if(!confirm("Confirmer l'abandon de cette équipe pour ce match ?")) return;
   stopTimer(m);
   m.resultType = slot==="A" ? "abandonA" : "abandonB";
   m.status = "done";
   saveDB();
-  maybeGenerateFinalPhase(catKey);
+  maybeGenerateFinalPhase();
   render();
 }
 function cascadeRemoveDependents(cs, m){
@@ -1147,24 +1192,23 @@ function fixRefereeConflict(cs, m){
     }
   }
 }
-function swapMatchTeam(catKey, matchId, slot, otherMatchId, otherSlot){
+function swapMatchTeam(matchId, slot, otherMatchId, otherSlot){
   const t = currentTournament(); if(!t) return;
-  const cs = t.categories[catKey];
-  const m1 = cs.matches.find(x=>x.id===matchId);
-  const m2 = cs.matches.find(x=>x.id===otherMatchId);
+  const m1 = t.matches.find(x=>x.id===matchId);
+  const m2 = t.matches.find(x=>x.id===otherMatchId);
   if(!m1 || !m2) return;
   if(m1.id===m2.id && slot===otherSlot) return;
   const val1 = slot==="A" ? m1.teamA : m1.teamB;
   const val2 = otherSlot==="A" ? m2.teamA : m2.teamB;
   if(slot==="A") m1.teamA = val2; else m1.teamB = val2;
   if(otherSlot==="A") m2.teamA = val1; else m2.teamB = val1;
-  fixRefereeConflict(cs, m1);
-  fixRefereeConflict(cs, m2);
+  fixRefereeConflict(t, m1);
+  fixRefereeConflict(t, m2);
   saveDB(); render();
 }
-function handleSwap(catKey, matchId, slot, value){
+function handleSwap(matchId, slot, value){
   const parts = value.split("|");
-  swapMatchTeam(catKey, matchId, slot, parts[0], parts[1]);
+  swapMatchTeam(matchId, slot, parts[0], parts[1]);
 }
 
 /* ===================== SAUVEGARDE / RESTAURATION ===================== */
@@ -1182,10 +1226,13 @@ function importBackup(file){
   reader.onload = ()=>{
     try{
       const data = JSON.parse(reader.result);
-      if(!data || !data.M || !data.F){ alert("Fichier invalide."); return; }
+      let finalData = null;
+      if(isNewFormat(data)) finalData = data;
+      else if(data && data.M && data.F) finalData = migrateOldDB(data);
+      if(!finalData){ alert("Fichier invalide."); return; }
       if(!confirm("Importer remplacera toutes les données actuelles. Continuer ?")) return;
-      DB = data;
-      uiState = { creating:false, categoryKey:null, collapsedSections:{} };
+      DB = finalData;
+      uiState = { creating:false, collapsedSections:{} };
       saveDB(); render();
     }catch(e){ alert("Fichier invalide : " + e.message); }
   };
@@ -1271,7 +1318,7 @@ function renderMatchRow(cs, m, canStart, swapCtx){
       const options = swapCtx.slots.map(s=>
         '<option value="'+s.matchId+'|'+s.slot+'" '+(s.matchId===m.id && s.slot===slot ? "selected":"")+'>'+esc(teamName(cs,s.teamId))+'</option>'
       ).join("");
-      return '<select class="swap-select" onchange="handleSwap(\''+swapCtx.catKey+'\',\''+m.id+'\',\''+slot+'\',this.value)">'+options+'</select>';
+      return '<select class="swap-select" onchange="handleSwap(\''+m.id+'\',\''+slot+'\',this.value)">'+options+'</select>';
     }
     return '<span class="'+(isWinner?"winner":"")+'">'+teamColorDot(cs,teamId)+esc(teamName(cs,teamId))+'</span>';
   };
@@ -1351,21 +1398,19 @@ function PHASE_LABEL_OR_POULE(cs,m){
   return PHASE_LABELS[m.phase] || m.phase;
 }
 
-function renderEstablishmentConfig(t, catKey){
-  const def = CATEGORIES_BY_TYPE[t.type].find(d=>d.key===catKey) || CATEGORIES_BY_TYPE[t.type][0];
+function renderEstablishmentConfig(t){
   const active = Object.keys(t.etablissements||{});
   const remaining = ESTABLISHMENTS.filter(e=>!active.includes(e));
+  const catLabel = CATEGORIES_BY_TYPE[t.gender].find(d=>d.key===t.category).label;
   let rows = active.map((estab,idx)=>{
-    const vals = t.etablissements[estab] || {};
-    const v = vals[def.key];
+    const v = t.etablissements[estab];
     const display = v ? v : "";
     const cell = '<td class="col-1"><input type="number" min="0" max="20" value="'+display+'" placeholder="0"'
-      + ' id="estabInput_'+idx+'_'+def.key+'" data-estab-input'
-      + ' onchange="updateCount(\''+estab+'\',\''+def.key+'\',this.value)"'
-      + ' onkeydown="handleEstabKeydown(event,\''+estab+'\',\''+def.key+'\','+idx+')">'
+      + ' id="estabInput_'+idx+'" data-estab-input'
+      + ' onchange="updateCount(\''+estab+'\',this.value)"'
+      + ' onkeydown="handleEstabKeydown(event,\''+estab+'\','+idx+')">'
       + ' <button class="btn small danger" style="padding:2px 7px;font-size:.68rem;" data-action="remove-estab" data-estab="'+esc(estab)+'" title="Retirer cet établissement">✕</button></td>';
-    return '<tr><td class="col-0">'+esc(estab)+'</td>'
-      + cell + '</tr>';
+    return '<tr><td class="col-0">'+esc(estab)+'</td>' + cell + '</tr>';
   }).join("");
   if(remaining.length){
     const idx = active.length;
@@ -1374,20 +1419,21 @@ function renderEstablishmentConfig(t, catKey){
     rows += '<tr><td class="col-0"><select id="estabSelect_'+idx+'" onchange="addEstablishment(this.value)">'+options+'</select></td>'
       + '<td class="col-1"></td></tr>';
   }
-  const header = '<tr><th class="col-0">Établissement</th><th class="col-1">'+esc(def.label)+'</th></tr>';
+  const header = '<tr><th class="col-0">Établissement</th><th class="col-1">'+esc(catLabel)+'</th></tr>';
   const collapsed = isCollapsed("estab");
   return '<div class="card">'
-    + '<h2 class="collapsible-title" data-action="toggle-section" data-section="estab">🏫 Établissements &amp; équipes engagées — '+esc(def.label)+' <span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>'
+    + '<h2 class="collapsible-title" data-action="toggle-section" data-section="estab">🏫 Établissements &amp; équipes engagées — '+esc(catLabel)+' <span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>'
     + (!collapsed ? ('<div class="table-wrap"><table class="estab-table">'+header+rows+'</table></div>'
         + '<p style="font-size:.8rem;color:var(--muted);margin-top:8px;">Choisissez un établissement dans la liste déroulante pour l\'ajouter, puis saisissez le nombre d\'équipes engagées (cellule vide = 0 équipe). Appuyez sur Entrée pour passer à la ligne suivante.</p>') : '')
     + '</div>';
 }
 
-function renderCategoryConfig(t, catKey, cs){
+function renderCategoryConfig(t){
+  const cs = t;
   const needsSetup = cs.stage==="setup" && cs.equipes.length>0;
   let warn = "";
   if(cs.equipes.length===0){
-    warn = '<div class="warn-pill">⚠ Aucune équipe engagée pour cette catégorie. Renseignez les établissements ci-dessus.</div>';
+    warn = '<div class="warn-pill">⚠ Aucune équipe engagée pour ce tournoi. Renseignez les établissements ci-dessus.</div>';
   } else if(needsSetup){
     warn = '<div class="warn-pill">⚠ Configuration à finaliser : répartissez les équipes en poules puis générez le calendrier.</div>';
   }
@@ -1403,17 +1449,17 @@ function renderCategoryConfig(t, catKey, cs){
         for(let i=0;i<cs.poolCount;i++){
           options += '<option value="'+i+'" '+(currentPool===i?"selected":"")+'>Poule '+String.fromCharCode(65+i)+'</option>';
         }
-        poolCell = '<td><select onchange="assignPoule(\''+catKey+'\',\''+e.id+'\',this.value)">'+options+'</select></td>';
+        poolCell = '<td><select onchange="assignPoule(\''+e.id+'\',this.value)">'+options+'</select></td>';
       }
-      return '<tr><td>'+esc(e.nom)+'</td><td>'+colorCellHtml(catKey,e)+'</td>'+poolCell+'</tr>';
+      return '<tr><td>'+esc(e.nom)+'</td><td>'+colorCellHtml(e)+'</td>'+poolCell+'</tr>';
     }).join("");
     poolAssignHtml = '<table class="pool-config-table"><tr><th>Équipe</th><th>Couleur</th>'+(showPool?"<th>Poule</th>":"")+'</tr>'+rows+'</table>';
   }
-  const generateButtonHtml = cs.equipes.length ? '<div class="generate-schedule-center"><button class="btn accent btn-generate" data-action="gen-schedule" data-cat="'+catKey+'">📅 Générer les matchs</button></div>' : "";
+  const generateButtonHtml = cs.equipes.length ? '<div class="generate-schedule-center"><button class="btn accent btn-generate" data-action="gen-schedule">📅 Générer les matchs</button></div>' : "";
   let poolSettingsHtml = "";
   const synced = cs.matchDuration!=null;
   const globalDurationHtml = '<div class="field-row" style="margin-top:14px;">'
-    + '<div class="field"><label>Durée des matchs (min)</label><input type="number" min="1" max="90" placeholder="Vide = par poule" value="'+(synced?cs.matchDuration:"")+'" onfocus="this.select()" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
+    + '<div class="field"><label>Durée des matchs (min)</label><input type="number" min="1" max="90" placeholder="Vide = par poule" value="'+(synced?cs.matchDuration:"")+'" onfocus="this.select()" onchange="setDuration(this.value)"></div>'
     + '</div>'
     + (cs.poolCount>=2 ? '<p style="font-size:.78rem;color:var(--muted);margin:2px 0 10px;">Si cette case est complétée, la même durée s\'applique à toutes les poules. Si elle est vide, choisissez une durée différente pour chaque poule ci-dessous.</p>' : '');
   let totalTournamentMin = 0;
@@ -1434,8 +1480,8 @@ function renderCategoryConfig(t, catKey, cs){
         + '<div><div class="pool-settings-title">Poule '+String.fromCharCode(65+i)+'</div><div class="pool-settings-sub" style="--pbadge:'+poolColorVar(i)+'">'+n+' équipe'+(n>1?"s":"")+'</div></div></div>'
         + '<div class="pool-settings-body">'
         + '<label class="pool-settings-duration">⏱ Durée d\'un match (min)<input type="number" min="1" max="90" value="'+dur+'" id="poolDurInput_'+i+'" '+(synced?"disabled title=\"Synchronisée sur toutes les poules — videz 'Durée des matchs' ci-dessus pour régler poule par poule\"":"")+''
-        + ' onfocus="this.select()" onchange="setPoolDuration(\''+catKey+'\','+i+',this.value)" onkeydown="handlePoolDurationKeydown(event,\''+catKey+'\','+i+')"></label>'
-        + '<label class="toggle-switch">🔁 Matchs aller-retour<input type="checkbox" '+(dbl?"checked":"")+' onchange="togglePoolDoubleRound(\''+catKey+'\','+i+',this.checked)"><span class="track"></span></label>'
+        + ' onfocus="this.select()" onchange="setPoolDuration('+i+',this.value)" onkeydown="handlePoolDurationKeydown(event,'+i+')"></label>'
+        + '<label class="toggle-switch">🔁 Matchs aller-retour<input type="checkbox" '+(dbl?"checked":"")+' onchange="togglePoolDoubleRound('+i+',this.checked)"><span class="track"></span></label>'
         + '<div class="pool-settings-total">🧮 '+nbMatches+' match'+(nbMatches>1?"s":"")+' × '+dur+' min = <b>'+formatMinutes(totalMin)+'</b></div>'
         + '</div></div>'
       );
@@ -1465,7 +1511,7 @@ function renderCategoryConfig(t, catKey, cs){
     : "Élimination directe (tableau à élimination, 2 qualifiés par poule)";
   const finalModeHtml = cs.poolCount>=2 ? (
     '<div class="field-row">'
-    + '<div class="field"><label>Mode de phase finale</label><select onchange="setFinalMode(\''+catKey+'\',this.value)">'
+    + '<div class="field"><label>Mode de phase finale</label><select onchange="setFinalMode(this.value)">'
     + '<option value="crossed" '+(cs.finalMode!=="sameRank"?"selected":"")+'>'+crossedLabel+'</option>'
     + '<option value="sameRank" '+(cs.finalMode==="sameRank"?"selected":"")+'>Même rang (1er vs 1er, 2e vs 2e, …)</option>'
     + '</select></div>'
@@ -1473,22 +1519,21 @@ function renderCategoryConfig(t, catKey, cs){
   ) : "";
   const rankOpts = (cs.poolCount===2 && cs.finalMode!=="sameRank") ? (
     '<div class="field-row">'
-    + '<label class="checkline"><input type="checkbox" '+(cs.rankingOptions.cl34?"checked":"")+' onchange="toggleRankOpt(\''+catKey+'\',\'cl34\',this.checked)"> Match de classement 3e/4e place</label>'
-    + '<label class="checkline"><input type="checkbox" '+(cs.rankingOptions.clDernier?"checked":"")+' onchange="toggleRankOpt(\''+catKey+'\',\'clDernier\',this.checked)"> Classement des dernières places</label>'
-    + '<label class="checkline"><input type="checkbox" '+(cs.rankingOptions.cl3e?"checked":"")+' onchange="toggleRankOpt(\''+catKey+'\',\'cl3e\',this.checked)"> Classement des 3e de poule (poules de 4)</label>'
+    + '<label class="checkline"><input type="checkbox" '+(cs.rankingOptions.cl34?"checked":"")+' onchange="toggleRankOpt(\'cl34\',this.checked)"> Match de classement 3e/4e place</label>'
+    + '<label class="checkline"><input type="checkbox" '+(cs.rankingOptions.clDernier?"checked":"")+' onchange="toggleRankOpt(\'clDernier\',this.checked)"> Classement des dernières places</label>'
+    + '<label class="checkline"><input type="checkbox" '+(cs.rankingOptions.cl3e?"checked":"")+' onchange="toggleRankOpt(\'cl3e\',this.checked)"> Classement des 3e de poule (poules de 4)</label>'
     + '</div>'
   ) : "";
-  const autoSplitHtml = (cs.poolCount>=2 && cs.equipes.length) ? '<div class="auto-split-row"><button class="btn-auto-split" data-action="auto-split" data-cat="'+catKey+'">🔀 Répartir automatiquement</button></div>' : '';
-  const collapsed = isCollapsed(catKey+"_config");
+  const autoSplitHtml = (cs.poolCount>=2 && cs.equipes.length) ? '<div class="auto-split-row"><button class="btn-auto-split" data-action="auto-split">🔀 Répartir automatiquement</button></div>' : '';
+  const collapsed = isCollapsed("config");
   return '<div class="card">'
-    + '<h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_config"><span>⚙️ Configuration — <span style="color:var(--accent2)">'+esc(cs.equipes.length)+' équipe(s)</span> <span class="badge '+cs.stage.replace("é","e")+'">'+esc(cs.stage)+'</span></span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>'
+    + '<h2 class="collapsible-title" data-action="toggle-section" data-section="config"><span>⚙️ Configuration — <span style="color:var(--accent2)">'+esc(cs.equipes.length)+' équipe(s)</span> <span class="badge '+cs.stage.replace("é","e")+'">'+esc(cs.stage)+'</span></span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>'
     + (!collapsed ? (warn
       + '<div class="field-row">'
-      + '<div class="field"><label>Nombre de poules</label><select onchange="setPoolCount(\''+catKey+'\',this.value)">'
+      + '<div class="field"><label>Nombre de poules</label><select onchange="setPoolCount(this.value)">'
       + [1,2,3,4,5,6].map(function(n){ return '<option value="'+n+'" '+(cs.poolCount===n?"selected":"")+'>'+n+' poule'+(n>1?"s":"")+'</option>'; }).join("")
       + '</select></div>'
-      + '<div class="field"><label>&nbsp;</label><button class="btn ghost" style="color:#334155;background:#eef1fb" data-action="reset-category" data-cat="'+catKey+'">↺ Réinitialiser</button></div>'
-      + '<div class="field"><label>&nbsp;</label><button class="btn danger" data-action="delete-category" data-cat="'+catKey+'">🗑 Supprimer cette catégorie</button></div>'
+      + '<div class="field"><label>&nbsp;</label><button class="btn ghost" style="color:#334155;background:#eef1fb" data-action="reset-category">↺ Réinitialiser</button></div>'
       + '</div>'
       + finalModeHtml
       + rankOpts
@@ -1501,8 +1546,8 @@ function renderCategoryConfig(t, catKey, cs){
     + '</div>';
 }
 
-function renderMatches(t, catKey, cs){
-  const liveId = liveMatchGlobal() ? liveMatchGlobal().m.id : null;
+function renderMatches(t){
+  const cs = t;
   const hasLive = !!liveMatchGlobal();
   if(!cs.matches.length) return '<div class="card"><p style="color:var(--muted)">Aucun match généré pour le moment.</p></div>';
   const byPhase = {};
@@ -1527,8 +1572,8 @@ function renderMatches(t, catKey, cs){
   Object.keys(byPhase).filter(k=>k.indexOf("elimR")===0)
     .sort((a,b)=>parseInt(a.replace("elimR",""),10)-parseInt(b.replace("elimR",""),10))
     .forEach(k=>finalKeys.push(k));
-  const collapsed = isCollapsed(catKey+"_matches");
-  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_matches"><span>📋 Calendrier des matchs</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
+  const collapsed = isCollapsed("matches");
+  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="matches"><span>📋 Calendrier des matchs</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
   if(!collapsed){
     const groupHtml = key=>{
       const list = byPhase[key];
@@ -1549,7 +1594,7 @@ function renderMatches(t, catKey, cs){
             slots.push({matchId:m.id, slot:"B", teamId:m.teamB});
           }
         });
-        if(slots.length>=4) swapCtx = {catKey:catKey, slots:slots};
+        if(slots.length>=4) swapCtx = {slots:slots};
       }
       return '<div class="phase-group"><div class="phase-title"'+titleStyle+'>🏐 '+title+'</div>'
         + (swapCtx ? '<div class="swap-hint">✏️ Vous pouvez échanger les équipes ci-dessous si besoin</div>' : '')
@@ -1571,9 +1616,11 @@ function renderMatches(t, catKey, cs){
   return html;
 }
 
-function renderStandings(t, catKey, cs){
-  const collapsed = isCollapsed(catKey+"_standings");
-  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_standings"><span>📊 Classement — '+esc(CATEGORIES_BY_TYPE[t.type].find(c=>c.key===catKey).label)+'</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
+function renderStandings(t){
+  const cs = t;
+  const catLabel = CATEGORIES_BY_TYPE[t.gender].find(c=>c.key===t.category).label;
+  const collapsed = isCollapsed("standings");
+  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="standings"><span>📊 Classement — '+esc(catLabel)+'</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
   if(!collapsed){
     if(cs.poolCount>1 && cs.poules.some(p=>p.length)){
       html += '<div class="standings-row">';
@@ -1604,15 +1651,17 @@ function renderBracketMatch(cs, m, extraClass){
   };
   return '<div class="bracket-match '+(extraClass||"")+'">' + row(m.teamA, m.scoreA) + row(m.teamB, m.scoreB) + '</div>';
 }
-function renderBracket(t, catKey, cs){
+function renderBracket(t){
+  const cs = t;
   if(cs.poolCount!==2 || cs.finalMode==="sameRank") return "";
   const demi1 = cs.matches.find(m=>m.phase==="demi1");
   const demi2 = cs.matches.find(m=>m.phase==="demi2");
   if(!demi1 || !demi2) return "";
   const finale = cs.matches.find(m=>m.phase==="finale");
   const cl34 = cs.matches.find(m=>m.phase==="cl34");
-  const collapsed = isCollapsed(catKey+"_bracket");
-  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_bracket"><span>🎾 Tableau final — '+esc(CATEGORIES_BY_TYPE[t.type].find(c=>c.key===catKey).label)+'</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
+  const catLabel = CATEGORIES_BY_TYPE[t.gender].find(c=>c.key===t.category).label;
+  const collapsed = isCollapsed("bracket");
+  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="bracket"><span>🎾 Tableau final — '+esc(catLabel)+'</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
   if(!collapsed){
     html += '<div class="bracket-wrap"><div class="bracket">'
       + '<div class="bracket-round">'
@@ -1630,10 +1679,12 @@ function renderBracket(t, catKey, cs){
   html += '</div>';
   return html;
 }
-function renderFinalRanking(t, catKey, cs){
+function renderFinalRanking(t){
+  const cs = t;
   const ranking = computeFinalRanking(cs);
   if(!ranking) return "";
-  const collapsed = isCollapsed(catKey+"_finalrank");
+  const catLabel = CATEGORIES_BY_TYPE[t.gender].find(c=>c.key===t.category).label;
+  const collapsed = isCollapsed("finalrank");
   let rank = 1;
   const rows = ranking.map(g=>{
     const label = g.teamIds.map(id=>teamColorDot(cs,id)+esc(teamName(cs,id))).join(" / ");
@@ -1642,34 +1693,32 @@ function renderFinalRanking(t, catKey, cs){
     rank += g.teamIds.length;
     return row;
   }).join("");
-  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_finalrank"><span>🏆 Classement final — '+esc(CATEGORIES_BY_TYPE[t.type].find(c=>c.key===catKey).label)+'</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
+  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="finalrank"><span>🏆 Classement final — '+esc(catLabel)+'</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
   if(!collapsed){
     html += '<div class="table-wrap"><table class="standings auto-width"><tr><th class="col-0">Rang</th><th class="col-1">Équipe</th></tr>'+rows+'</table></div>';
   }
   html += '</div>';
   return html;
 }
-function renderCategoryView(t, catKey){
-  const cs = t.categories[catKey];
-  return renderCategoryConfig(t, catKey, cs) + renderStandings(t, catKey, cs) + renderBracket(t, catKey, cs) + renderFinalRanking(t, catKey, cs) + renderMatches(t, catKey, cs);
-}
 
-function renderTournamentRecap(t){
-  const catDefs = CATEGORIES_BY_TYPE[t.type];
+function renderTournamentRecap(tab){
+  const catDefs = CATEGORIES_BY_TYPE[tab];
   const sections = [];
   catDefs.forEach(def=>{
-    const cs = t.categories[def.key];
-    const ranking = computeFinalRanking(cs);
+    const ctx = DB[tab][def.key];
+    const ct = ctx.tournaments.find(x=>x.id===ctx.currentId);
+    if(!ct) return;
+    const ranking = computeFinalRanking(ct);
     if(!ranking) return;
     let rank = 1;
     const rows = ranking.map(g=>{
-      const label = g.teamIds.map(id=>teamColorDot(cs,id)+esc(teamName(cs,id))).join(" / ");
+      const label = g.teamIds.map(id=>teamColorDot(ct,id)+esc(teamName(ct,id))).join(" / ");
       const rankLabel = g.tied ? (rank+"-"+(rank+g.teamIds.length-1)+" ex æquo") : String(rank);
       const row = '<tr><td class="col-0"><b>'+rankLabel+'</b></td><td class="col-1">'+label+'</td></tr>';
       rank += g.teamIds.length;
       return row;
     }).join("");
-    sections.push('<div><h3>'+esc(def.label)+'</h3><div class="table-wrap"><table class="standings auto-width"><tr><th class="col-0">Rang</th><th class="col-1">Équipe</th></tr>'+rows+'</table></div></div>');
+    sections.push('<div><h3>'+esc(def.label)+' — '+esc(ct.nom)+'</h3><div class="table-wrap"><table class="standings auto-width"><tr><th class="col-0">Rang</th><th class="col-1">Équipe</th></tr>'+rows+'</table></div></div>');
   });
   if(!sections.length) return "";
   const collapsed = isCollapsed("tournament_recap");
@@ -1680,20 +1729,18 @@ function renderTournamentRecap(t){
   html += '</div>';
   return html;
 }
-function renderTournamentBody(tab, t){
-  const catDefs = CATEGORIES_BY_TYPE[t.type];
-  if(!uiState.categoryKey || !t.categories[uiState.categoryKey]) uiState.categoryKey = catDefs[0].key;
+function renderTournamentBody(t){
   let html = renderLiveBanner();
-  html += renderEstablishmentConfig(t, uiState.categoryKey);
-  html += renderTournamentRecap(t);
-  html += renderCategoryView(t, uiState.categoryKey);
+  html += renderEstablishmentConfig(t);
+  html += renderTournamentRecap(DB.activeTab);
+  html += renderCategoryConfig(t) + renderStandings(t) + renderBracket(t) + renderFinalRanking(t) + renderMatches(t);
   return html;
 }
 
-function renderNoTournament(tab){
+function renderNoTournament(){
   let html = '<div class="card empty-state">';
   if(!uiState.creating){
-    html += '<p>😴 Aucun tournoi sélectionné pour cet onglet.</p>'
+    html += '<p>😴 Aucun tournoi sélectionné pour cette catégorie.</p>'
       + '<button class="btn accent" data-action="new-tournament">➕ Créer un nouveau tournoi</button>';
   } else {
     html += '<div class="new-tournament-form">'
@@ -1706,10 +1753,10 @@ function renderNoTournament(tab){
   return html;
 }
 
-function renderTournamentBar(tab, ctx, tournament){
+function renderTournamentBar(ctx, tournament){
   let html = '<div class="tournament-bar">';
   if(ctx.tournaments.length){
-    html += '<select data-action-select="select-tournament" onchange="selectTournament(\''+tab+'\',this.value)">';
+    html += '<select onchange="selectTournament(this.value)">';
     ctx.tournaments.forEach(t=>{
       const d = new Date(t.dateCreation).toLocaleDateString("fr-FR");
       html += '<option value="'+t.id+'" '+(t.id===ctx.currentId?"selected":"")+'>'+esc(t.nom)+' ('+d+')</option>';
@@ -1735,20 +1782,20 @@ function renderTournamentBar(tab, ctx, tournament){
 
 function render(){
   const tab = DB.activeTab;
-  const ctx = DB[tab];
+  const cat = DB.activeCategory[tab];
+  const ctx = DB[tab][cat];
   const tournament = ctx.tournaments.find(t=>t.id===ctx.currentId) || null;
   document.getElementById("tabBtnM").classList.toggle("active", tab==="M");
   document.getElementById("tabBtnF").classList.toggle("active", tab==="F");
   const catTabsBar = document.getElementById("catTabsBar");
   const catDefs = CATEGORIES_BY_TYPE[tab];
-  if(!uiState.categoryKey || !catDefs.some(d=>d.key===uiState.categoryKey)) uiState.categoryKey = catDefs[0].key;
   catTabsBar.innerHTML = catDefs.map(d=>
-    '<button data-action="select-category" data-cat="'+d.key+'" class="'+(uiState.categoryKey===d.key?"active":"")+'">'+esc(d.label)+'</button>'
+    '<button data-action="select-category" data-cat="'+d.key+'" class="'+(cat===d.key?"active":"")+'">'+esc(d.label)+'</button>'
   ).join("");
   catTabsBar.classList.remove("hidden");
   const app = document.getElementById("app");
-  let html = renderTournamentBar(tab, ctx, tournament);
-  html += tournament ? (isCollapsed("tournamentBody") ? "" : renderTournamentBody(tab, tournament)) : renderNoTournament(tab);
+  let html = renderTournamentBar(ctx, tournament);
+  html += tournament ? (isCollapsed("tournamentBody") ? "" : renderTournamentBody(tournament)) : renderNoTournament();
   app.innerHTML = html;
 }
 
@@ -1763,16 +1810,15 @@ document.body.addEventListener("click", e=>{
     case "cancel-new-tournament": uiState.creating = false; render(); break;
     case "create-tournament": {
       const input = document.getElementById("newTournamentName");
-      createTournament(DB.activeTab, input ? input.value : "");
+      createTournament(input ? input.value : "");
       break;
     }
-    case "delete-tournament": deleteTournament(DB.activeTab, el.dataset.id); break;
-    case "select-category": uiState.categoryKey = el.dataset.cat; render(); break;
+    case "delete-tournament": deleteTournament(el.dataset.id); break;
+    case "select-category": switchCategory(el.dataset.cat); break;
     case "toggle-section": toggleSection(el.dataset.section); break;
-    case "auto-split": autoSplit(el.dataset.cat); break;
-    case "gen-schedule": genSchedule(el.dataset.cat); break;
-    case "reset-category": resetCategory(el.dataset.cat); break;
-    case "delete-category": deleteCategory(el.dataset.cat); break;
+    case "auto-split": autoSplit(); break;
+    case "gen-schedule": genSchedule(); break;
+    case "reset-category": resetCategory(); break;
     case "remove-estab": removeEstablishment(el.dataset.estab); break;
     case "start-match": startMatch(el.dataset.id); break;
     case "reopen-match": reopenMatch(el.dataset.id); break;
