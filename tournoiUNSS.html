@@ -97,7 +97,7 @@ input,select{font-family:inherit;}
 .estab-table{width:100%;border-collapse:collapse;}
 .estab-table th,.estab-table td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);font-size:.88rem;}
 .estab-table input[type=number]{width:62px;padding:6px;border-radius:8px;border:1px solid var(--line);text-align:center;font-weight:700;}
-.estab-table th{color:#334155;font-size:.78rem;text-transform:uppercase;letter-spacing:.4px;}
+.estab-table th{font-size:.78rem;text-transform:uppercase;letter-spacing:.4px;}
 
 .config-toggle{cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
 .warn-pill{background:#fef3c7;color:#92400e;padding:6px 12px;border-radius:10px;font-size:.82rem;font-weight:600;margin:8px 0;display:inline-block;}
@@ -355,6 +355,36 @@ function updateCount(estab, cat, val){
   counts[estab][cat] = n;
   applyEstablishmentConfig(t, counts);
   saveDB(); render();
+}
+function addEstablishment(schoolName){
+  if(!schoolName) return;
+  const t = currentTournament();
+  if(!t) return;
+  if(!t.etablissements) t.etablissements = {};
+  if(!t.etablissements[schoolName]) t.etablissements[schoolName] = {};
+  saveDB(); render();
+  const idx = Object.keys(t.etablissements).indexOf(schoolName);
+  const firstCat = CATEGORIES_BY_TYPE[t.type][0].key;
+  const el = document.getElementById("estabInput_"+idx+"_"+firstCat);
+  if(el) el.focus();
+}
+function removeEstablishment(schoolName){
+  const t = currentTournament();
+  if(!t) return;
+  if(!confirm("Retirer " + schoolName + " de ce tournoi ? Ses équipes et matchs associés seront supprimés.")) return;
+  const counts = JSON.parse(JSON.stringify(t.etablissements||{}));
+  delete counts[schoolName];
+  applyEstablishmentConfig(t, counts);
+  saveDB(); render();
+}
+function handleEstabKeydown(event, estab, cat, rowIndex){
+  if(event.key!=="Enter") return;
+  event.preventDefault();
+  updateCount(estab, cat, event.target.value);
+  const nextInput = document.getElementById("estabInput_"+(rowIndex+1)+"_"+cat);
+  if(nextInput){ nextInput.focus(); nextInput.select(); return; }
+  const nextSelect = document.getElementById("estabSelect_"+(rowIndex+1));
+  if(nextSelect) nextSelect.focus();
 }
 function resetCategory(cat){
   if(!confirm("Réinitialiser les poules et le calendrier de cette catégorie ? Les résultats seront perdus.")) return;
@@ -735,20 +765,35 @@ function PHASE_LABEL_OR_POULE(cs,m){
 
 function renderEstablishmentConfig(t){
   const catDefs = CATEGORIES_BY_TYPE[t.type];
-  let rows = "";
-  ESTABLISHMENTS.forEach(estab=>{
+  const active = Object.keys(t.etablissements||{});
+  const remaining = ESTABLISHMENTS.filter(e=>!active.includes(e));
+  let rows = active.map((estab,idx)=>{
     const vals = t.etablissements[estab] || {};
-    rows += "<tr><td>"+esc(estab)+"</td>" + catDefs.map(def=>{
-      const v = vals[def.key] || 0;
-      return '<td><input type="number" min="0" max="20" value="'+v+'" onchange="updateCount(\''+estab+'\',\''+def.key+'\',this.value)"></td>';
-    }).join("") + "</tr>";
-  });
-  const header = "<tr><th>Établissement</th>" + catDefs.map(d=>"<th>"+d.label+"</th>").join("") + "</tr>";
+    const cells = catDefs.map((def,i)=>{
+      const v = vals[def.key];
+      const display = v ? v : "";
+      return '<td class="col-'+((i+1)%8)+'"><input type="number" min="0" max="20" value="'+display+'" placeholder="0"'
+        + ' id="estabInput_'+idx+'_'+def.key+'" data-estab-input'
+        + ' onchange="updateCount(\''+estab+'\',\''+def.key+'\',this.value)"'
+        + ' onkeydown="handleEstabKeydown(event,\''+estab+'\',\''+def.key+'\','+idx+')"></td>';
+    }).join("");
+    return '<tr><td class="col-0">'+esc(estab)
+      + ' <button class="btn small danger" data-action="remove-estab" data-estab="'+esc(estab)+'" title="Retirer cet établissement">✕</button></td>'
+      + cells + '</tr>';
+  }).join("");
+  if(remaining.length){
+    const idx = active.length;
+    const options = '<option value="">— Choisir un établissement —</option>'
+      + remaining.map(e=>'<option value="'+esc(e)+'">'+esc(e)+'</option>').join("");
+    rows += '<tr><td class="col-0"><select id="estabSelect_'+idx+'" onchange="addEstablishment(this.value)">'+options+'</select></td>'
+      + catDefs.map((d,i)=>'<td class="col-'+((i+1)%8)+'"></td>').join("") + '</tr>';
+  }
+  const header = '<tr><th class="col-0">Établissement</th>' + catDefs.map((d,i)=>'<th class="col-'+((i+1)%8)+'">'+esc(d.label)+'</th>').join("") + '</tr>';
   const toggleLabel = uiState.configOpen ? "▲ Réduire" : "▼ Déplier";
   return '<div class="card">'
     + '<h2 class="config-toggle" data-action="toggle-config">🏫 Établissements &amp; équipes engagées <span class="btn small">'+toggleLabel+'</span></h2>'
-    + (uiState.configOpen ? ('<table class="estab-table">'+header+rows+'</table>'
-        + '<p style="font-size:.8rem;color:var(--muted);margin-top:8px;">Indiquez le nombre d\'équipes engagées par établissement et par catégorie (0 = non engagé). La saisie est enregistrée automatiquement.</p>') : '')
+    + (uiState.configOpen ? ('<div class="table-wrap"><table class="estab-table">'+header+rows+'</table></div>'
+        + '<p style="font-size:.8rem;color:var(--muted);margin-top:8px;">Choisissez un établissement dans la liste déroulante pour l\'ajouter, puis saisissez le nombre d\'équipes engagées (cellule vide = 0 équipe). Appuyez sur Entrée pour passer à la ligne suivante.</p>') : '')
     + '</div>';
 }
 
@@ -786,8 +831,7 @@ function renderCategoryConfig(t, catKey, cs){
     + warn
     + '<div class="field-row">'
     + '<div class="field"><label>Nombre de poules</label><select onchange="setPoolCount(\''+catKey+'\',this.value)">'
-    + '<option value="1" '+(cs.poolCount===1?"selected":"")+'>1 poule</option>'
-    + '<option value="2" '+(cs.poolCount===2?"selected":"")+'>2 poules</option>'
+    + [1,2,3,4,5,6].map(function(n){ return '<option value="'+n+'" '+(cs.poolCount===n?"selected":"")+'>'+n+' poule'+(n>1?"s":"")+'</option>'; }).join("")
     + '</select></div>'
     + '<div class="field"><label>Durée d\'un match (min)</label><input type="number" min="1" max="90" value="'+cs.matchDuration+'" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
     + '<div class="field"><label>&nbsp;</label><button class="btn accent" data-action="gen-schedule" data-cat="'+catKey+'">📅 '+(cs.matches.length?"Régénérer":"Générer")+' le calendrier</button></div>'
@@ -925,6 +969,7 @@ document.body.addEventListener("click", e=>{
     case "auto-split": autoSplit(el.dataset.cat); break;
     case "gen-schedule": genSchedule(el.dataset.cat); break;
     case "reset-category": resetCategory(el.dataset.cat); break;
+    case "remove-estab": removeEstablishment(el.dataset.estab); break;
     case "start-match": startMatch(el.dataset.id); break;
     case "pause-match": pauseMatch(el.dataset.id); break;
     case "resume-match": resumeMatch(el.dataset.id); break;
