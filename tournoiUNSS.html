@@ -178,6 +178,8 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 .minus-btn{display:inline-block;margin-top:14px;background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:10px;padding:8px 16px;font-size:1.05rem;}
 #chronoDisplay{font-size:7rem;font-weight:900;letter-spacing:3px;font-variant-numeric:tabular-nums;min-width:320px;text-align:center;}
 #chronoDisplay.overtime{color:#fca5a5;}
+.chrono-reset-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:50%;width:34px;height:34px;font-size:1.1rem;line-height:1;cursor:pointer;flex:0 0 auto;}
+.chrono-reset-btn:hover{background:rgba(255,255,255,.3);}
 .live-sub{text-align:center;font-size:1.05rem;opacity:.85;margin-top:14px;}
 .live-controls{display:flex;justify-content:center;gap:16px;margin-top:32px;flex-wrap:wrap;}
 .live-controls .btn{font-size:1.1rem;padding:14px 24px;}
@@ -187,6 +189,24 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 .tiebreak-box{text-align:center;margin-top:20px;}
 .tiebreak-box .btn{margin:4px;font-size:1.1rem;padding:14px 20px;}
 .color-dot{display:inline-block;width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.25);vertical-align:middle;margin-right:6px;}
+
+.bracket-wrap{overflow-x:auto;padding:10px 2px;}
+.bracket{display:flex;align-items:stretch;gap:0;min-width:560px;}
+.bracket-round{display:flex;flex-direction:column;justify-content:center;gap:36px;}
+.bracket-slot{display:flex;flex-direction:column;gap:6px;}
+.bracket-label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;}
+.bracket-match{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:220px;box-shadow:0 2px 6px rgba(20,30,60,.08);}
+.bracket-match.final{border-color:#1d4ed8;box-shadow:0 4px 14px rgba(29,78,216,.18);}
+.brow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;font-size:.85rem;font-weight:600;border-bottom:1px solid var(--line);}
+.brow:last-child{border-bottom:none;}
+.brow.winner{background:#fef3c7;color:#92400e;font-weight:800;}
+.brow.placeholder{color:var(--muted);font-style:italic;font-weight:500;}
+.bscore{background:#1e293b;color:#fff;border-radius:6px;padding:2px 8px;font-weight:800;font-size:.8rem;}
+.bracket-lines{width:40px;align-self:stretch;position:relative;min-height:120px;}
+.bracket-lines::before{content:"";position:absolute;left:0;top:25%;bottom:25%;width:20px;border:2px solid #cbd5e1;border-left:none;border-radius:0 10px 10px 0;}
+.bracket-lines::after{content:"";position:absolute;left:20px;top:50%;width:20px;height:2px;background:#cbd5e1;}
+.bracket-final-round{justify-content:center;}
+.bracket-third{margin-top:24px;padding-top:18px;border-top:1px dashed var(--line);max-width:260px;}
 
 .field-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:6px;}
 .field{display:flex;flex-direction:column;gap:4px;}
@@ -593,6 +613,60 @@ function winnerOf(m){
 }
 function loserOf(m){ const w = winnerOf(m); return w===m.teamA ? m.teamB : m.teamA; }
 
+function computeFinalRanking(cs){
+  if(cs.poolCount!==2 || cs.stage!=="terminé") return null;
+  if(cs.finalMode==="sameRank"){
+    const rangMatches = cs.matches.filter(m=>typeof m.phase==="string" && m.phase.indexOf("rang")===0)
+      .sort((a,b)=>parseInt(a.phase.replace("rang",""),10)-parseInt(b.phase.replace("rang",""),10));
+    if(!rangMatches.length || !rangMatches.every(m=>m.status==="done")) return null;
+    const flat = [];
+    rangMatches.forEach(m=>{
+      flat.push({teamIds:[winnerOf(m)], tied:false});
+      flat.push({teamIds:[loserOf(m)], tied:false});
+    });
+    return flat;
+  }
+  const finale = cs.matches.find(m=>m.phase==="finale");
+  if(!finale || finale.status!=="done") return null;
+  const demi1 = cs.matches.find(m=>m.phase==="demi1");
+  const demi2 = cs.matches.find(m=>m.phase==="demi2");
+  const s0 = poolStandings(cs,0), s1 = poolStandings(cs,1);
+  const groups = [];
+  groups.push({teamIds:[winnerOf(finale)], tied:false});
+  groups.push({teamIds:[loserOf(finale)], tied:false});
+  const cl34 = cs.matches.find(m=>m.phase==="cl34");
+  if(cl34 && cl34.status==="done"){
+    groups.push({teamIds:[winnerOf(cl34)], tied:false});
+    groups.push({teamIds:[loserOf(cl34)], tied:false});
+  } else if(demi1 && demi2){
+    groups.push({teamIds:[loserOf(demi1), loserOf(demi2)], tied:true});
+  }
+  const cl3e = cs.matches.find(m=>m.phase==="cl3e");
+  if(cl3e && cl3e.status==="done"){
+    groups.push({teamIds:[winnerOf(cl3e)], tied:false});
+    groups.push({teamIds:[loserOf(cl3e)], tied:false});
+  } else if(s0.length>=4 && s1.length>=4){
+    groups.push({teamIds:[s0[2].id, s1[2].id], tied:true});
+  }
+  const clDernier = cs.matches.find(m=>m.phase==="clDernier");
+  if(clDernier && clDernier.status==="done"){
+    groups.push({teamIds:[winnerOf(clDernier)], tied:false});
+    groups.push({teamIds:[loserOf(clDernier)], tied:false});
+  } else if(s0.length && s1.length){
+    groups.push({teamIds:[s0[s0.length-1].id, s1[s1.length-1].id], tied:true});
+  }
+  const seen = new Set();
+  const flat = [];
+  groups.forEach(g=>{
+    const ids = g.teamIds.filter(id=>!seen.has(id));
+    ids.forEach(id=>seen.add(id));
+    if(ids.length) flat.push({teamIds:ids, tied:g.tied && ids.length>1});
+  });
+  const leftover = cs.equipes.map(e=>e.id).filter(id=>!seen.has(id));
+  if(leftover.length) flat.push({teamIds:leftover, tied:leftover.length>1});
+  return flat;
+}
+
 function setFinalMode(cat, mode){
   const t = currentTournament(); const cs = t.categories[cat];
   const hasFinalMatches = cs.matches.some(m=>m.phase!=="poule");
@@ -695,6 +769,14 @@ function startMatch(id){
 }
 function pauseMatch(id){ const {m}=findMatch(id); if(!m) return; stopTimer(m); saveDB(); render(); }
 function resumeMatch(id){ const {m}=findMatch(id); if(!m) return; m.timer.running=true; m.timer.startedAt=nowSec(); saveDB(); render(); }
+function resetTimer(id){
+  const {m} = findMatch(id);
+  if(!m) return;
+  if(!confirm("Remettre le chrono au début (durée réglée) ?")) return;
+  m.timer.accumulatedSec = 0;
+  if(m.timer.running) m.timer.startedAt = nowSec();
+  saveDB(); render();
+}
 function addGoal(id, slot, delta){
   const {m}=findMatch(id); if(!m || m.status!=="live") return;
   if(slot==="A") m.scoreA = Math.max(0, m.scoreA+delta);
@@ -761,7 +843,7 @@ function reopenMatch(id){
   m.status = "live";
   m.resultType = null;
   m.shootoutWinner = null;
-  m.timer = { running:true, startedAt: nowSec(), accumulatedSec:0 };
+  m.timer = { running:false, startedAt:null, accumulatedSec:0 };
   saveDB(); render();
 }
 
@@ -802,10 +884,10 @@ function dataTable(headers, rows){
   return h;
 }
 function standingsTable(cs, standings, title){
-  const headers = ["#","Équipe","Pts","J","V","N","D","Ab.","BP","BC","Diff"];
+  const headers = ["#","Équipe","Pts","J","V","N","D","BP","BC","Diff"];
   const rows = standings.map((s,i)=>[
     (i===0? '<span class="rank1">1</span>' : (i+1)),
-    esc(teamName(cs,s.id)), "<b>"+s.pts+"</b>", s.j, s.v, s.n, s.d, s.ab, s.bp, s.bc, (s.bp-s.bc>0?"+":"")+(s.bp-s.bc)
+    esc(teamName(cs,s.id)), "<b>"+s.pts+"</b>", s.j, s.v, s.n, s.d, s.bp, s.bc, (s.bp-s.bc>0?"+":"")+(s.bp-s.bc)
   ]);
   return '<h3>'+title+'</h3>' + dataTable(headers, rows);
 }
@@ -879,7 +961,11 @@ function renderLiveBanner(){
       + '<div class="team-score-btn" data-action="goal-plus" data-id="'+m.id+'" data-team="A">'
       +   '<div class="tname">'+teamColorDot(cs,m.teamA)+esc(teamName(cs,m.teamA))+'</div><div class="tscore">'+m.scoreA+'</div>'
       +   '<button class="minus-btn" data-action="goal-minus" data-id="'+m.id+'" data-team="A">-1</button></div>'
-      + '<div><div id="chronoDisplay">'+formatRemaining(cs,m)+'</div>'
+      + '<div style="text-align:center">'
+      +   '<div style="display:flex;align-items:center;justify-content:center;gap:10px;">'
+      +     '<div id="chronoDisplay">'+formatRemaining(cs,m)+'</div>'
+      +     '<button class="chrono-reset-btn" data-action="reset-timer" data-id="'+m.id+'" title="Remettre le chrono au début">⟲</button>'
+      +   '</div>'
       +   '<div class="live-sub">Durée réglée : '+cs.matchDuration+' min · Arbitrage : '+(m.refereeTeamId?esc(teamName(cs,m.refereeTeamId)):"—")+'</div></div>'
       + '<div class="team-score-btn" data-action="goal-plus" data-id="'+m.id+'" data-team="B">'
       +   '<div class="tname">'+teamColorDot(cs,m.teamB)+esc(teamName(cs,m.teamB))+'</div><div class="tscore">'+m.scoreB+'</div>'
@@ -1050,9 +1136,65 @@ function renderStandings(t, catKey, cs){
   return html;
 }
 
+function renderBracketMatch(cs, m, extraClass){
+  if(!m) return '<div class="bracket-match '+(extraClass||"")+'"><div class="brow placeholder">À déterminer</div><div class="brow placeholder">À déterminer</div></div>';
+  const winnerId = matchWinnerId(m);
+  const row = (teamId, score) => {
+    const isWinner = winnerId && winnerId===teamId;
+    const name = teamId ? (teamColorDot(cs,teamId)+esc(teamName(cs,teamId))) : '<span style="opacity:.5">À déterminer</span>';
+    const showScore = m.status==="done" || m.status==="live";
+    return '<div class="brow'+(isWinner?" winner":"")+'"><span>'+name+'</span>'+(showScore?'<span class="bscore">'+score+'</span>':'')+'</div>';
+  };
+  return '<div class="bracket-match '+(extraClass||"")+'">' + row(m.teamA, m.scoreA) + row(m.teamB, m.scoreB) + '</div>';
+}
+function renderBracket(t, catKey, cs){
+  if(cs.poolCount!==2 || cs.finalMode==="sameRank") return "";
+  const demi1 = cs.matches.find(m=>m.phase==="demi1");
+  const demi2 = cs.matches.find(m=>m.phase==="demi2");
+  if(!demi1 || !demi2) return "";
+  const finale = cs.matches.find(m=>m.phase==="finale");
+  const cl34 = cs.matches.find(m=>m.phase==="cl34");
+  const collapsed = isCollapsed(catKey+"_bracket");
+  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_bracket"><span>🎾 Tableau final — '+esc(CATEGORIES_BY_TYPE[t.type].find(c=>c.key===catKey).label)+'</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
+  if(!collapsed){
+    html += '<div class="bracket-wrap"><div class="bracket">'
+      + '<div class="bracket-round">'
+      +   '<div class="bracket-slot"><div class="bracket-label">Demi-finale 1</div>'+renderBracketMatch(cs,demi1)+'</div>'
+      +   '<div class="bracket-slot"><div class="bracket-label">Demi-finale 2</div>'+renderBracketMatch(cs,demi2)+'</div>'
+      + '</div>'
+      + '<div class="bracket-lines"></div>'
+      + '<div class="bracket-round bracket-final-round">'
+      +   '<div class="bracket-slot"><div class="bracket-label">🏆 Finale</div>'+renderBracketMatch(cs,finale,"final")+'</div>'
+      + '</div>'
+      + '</div>'
+      + (cl34 ? '<div class="bracket-third"><div class="bracket-label">Match pour la 3e place</div>'+renderBracketMatch(cs,cl34)+'</div>' : '')
+      + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+function renderFinalRanking(t, catKey, cs){
+  const ranking = computeFinalRanking(cs);
+  if(!ranking) return "";
+  const collapsed = isCollapsed(catKey+"_finalrank");
+  let rank = 1;
+  const rows = ranking.map(g=>{
+    const label = g.teamIds.map(id=>teamColorDot(cs,id)+esc(teamName(cs,id))).join(" / ");
+    const rankLabel = g.tied ? (rank+"-"+(rank+g.teamIds.length-1)+" ex æquo") : String(rank);
+    const row = '<tr><td class="col-0"><b>'+rankLabel+'</b></td><td class="col-1">'+label+'</td></tr>';
+    rank += g.teamIds.length;
+    return row;
+  }).join("");
+  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_finalrank"><span>🏆 Classement final — '+esc(CATEGORIES_BY_TYPE[t.type].find(c=>c.key===catKey).label)+'</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
+  if(!collapsed){
+    html += '<div class="table-wrap"><table class="standings"><tr><th class="col-0">Rang</th><th class="col-1">Équipe</th></tr>'+rows+'</table></div>';
+  }
+  html += '</div>';
+  return html;
+}
 function renderCategoryView(t, catKey){
   const cs = t.categories[catKey];
-  return renderCategoryConfig(t, catKey, cs) + renderStandings(t, catKey, cs) + renderMatches(t, catKey, cs);
+  return renderCategoryConfig(t, catKey, cs) + renderStandings(t, catKey, cs) + renderBracket(t, catKey, cs) + renderFinalRanking(t, catKey, cs) + renderMatches(t, catKey, cs);
 }
 
 function renderTournamentBody(tab, t){
@@ -1152,6 +1294,7 @@ document.body.addEventListener("click", e=>{
     case "reopen-match": reopenMatch(el.dataset.id); break;
     case "pause-match": pauseMatch(el.dataset.id); break;
     case "resume-match": resumeMatch(el.dataset.id); break;
+    case "reset-timer": resetTimer(el.dataset.id); break;
     case "goal-plus": addGoal(el.dataset.id, el.dataset.team, 1); break;
     case "goal-minus": addGoal(el.dataset.id, el.dataset.team, -1); break;
     case "finish-match": finishMatch(el.dataset.id); break;
