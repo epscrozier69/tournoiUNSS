@@ -161,7 +161,7 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 .toggle-switch input:checked + .track::before{transform:translateX(18px);}
 .generate-schedule-center{text-align:center;margin-top:20px;padding-top:16px;border-top:1px dashed var(--line);}
 .btn-generate{font-size:1rem;padding:13px 32px;box-shadow:0 4px 14px rgba(234,88,12,.35);}
-.auto-split-row{text-align:center;margin:4px 0 14px;}
+.auto-split-row{text-align:center;margin:2px 0 10px;}
 .btn-auto-split{
   border:none;border-radius:12px;padding:13px 28px;font-weight:800;font-size:.95rem;
   background:linear-gradient(120deg,#7c3aed,#2563eb);color:#fff;cursor:pointer;
@@ -175,6 +175,9 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 .pool-total-summary .pool-total-grand b{font-size:1.4rem;color:#ea580c;}
 .pools-matches-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;}
 .pools-matches-row>div{flex:1;min-width:320px;}
+.pool-color-block{border-left:5px solid var(--pc);background:var(--pt);border-radius:10px;padding:10px 14px;}
+.pool-color-block h3{margin-top:4px;}
+.pool-color-block .phase-group{background:transparent;}
 
 .phase-group{margin-top:16px;}
 .phase-title{font-weight:800;color:#1e3a8a;font-size:.92rem;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
@@ -626,9 +629,9 @@ function formatMinutes(mins){
   const h = Math.floor(mins/60), m = mins%60;
   return h+"h"+(m? String(m).padStart(2,"0") : "");
 }
-function newMatch(phase, poolIndex, a, b){
+function newMatch(phase, poolIndex, a, b, round){
   return {
-    id: uid(), phase, poolIndex, teamA:a, teamB:b, refereeTeamId:null,
+    id: uid(), phase, poolIndex, round: round!=null?round:null, teamA:a, teamB:b, refereeTeamId:null,
     scoreA:0, scoreB:0, status:"pending", resultType:null, shootoutWinner:null,
     timer:{ running:false, startedAt:null, accumulatedSec:0 }
   };
@@ -641,6 +644,25 @@ function assignRefereesInOrder(cs, matches){
     const chosen = candidates[0];
     m.refereeTeamId = chosen;
     cs.refereeCounts[chosen] = (cs.refereeCounts[chosen]||0) + 1;
+  });
+}
+function assignRefereesForPoolMatches(cs, matches){
+  const byRound = {};
+  matches.forEach(m=>{ (byRound[m.round]=byRound[m.round]||[]).push(m); });
+  Object.keys(byRound).forEach(r=>{
+    const roundMatches = byRound[r];
+    const busy = new Set();
+    roundMatches.forEach(m=>{ busy.add(m.teamA); busy.add(m.teamB); });
+    roundMatches.forEach(m=>{
+      const allCandidates = cs.equipes.filter(e=> e.id!==m.teamA && e.id!==m.teamB).map(e=>e.id);
+      if(!allCandidates.length){ m.refereeTeamId = null; return; }
+      const free = allCandidates.filter(id=> !busy.has(id));
+      const pool = free.length ? free : allCandidates;
+      pool.sort((x,y)=> (cs.refereeCounts[x]||0)-(cs.refereeCounts[y]||0) || x.localeCompare(y));
+      const chosen = pool[0];
+      m.refereeTeamId = chosen;
+      cs.refereeCounts[chosen] = (cs.refereeCounts[chosen]||0) + 1;
+    });
   });
 }
 function genSchedule(cat){
@@ -659,10 +681,10 @@ function genSchedule(cat){
     poolRounds.forEach((rounds, idx)=>{
       const round = rounds[r];
       if(!round) return;
-      round.forEach(([a,b]) => matches.push(newMatch("poule", idx, a, b)));
+      round.forEach(([a,b]) => matches.push(newMatch("poule", idx, a, b, r)));
     });
   }
-  assignRefereesInOrder(cs, matches);
+  assignRefereesForPoolMatches(cs, matches);
   cs.matches = matches;
   cs.stage = "poules";
   saveDB(); render();
@@ -977,13 +999,16 @@ function dataTable(headers, rows){
   h += '</tbody></table></div>';
   return h;
 }
-function standingsTable(cs, standings, title){
+function poolColorVar(i){ return 'var(--col'+(i%8)+'-h)'; }
+function poolTintVar(i){ return 'var(--col'+(i%8)+'-c)'; }
+function standingsTable(cs, standings, title, poolIndex){
   const headers = ["#","Équipe","Pts","J","V","N","D","BP","BC","Diff"];
   const rows = standings.map((s,i)=>[
     (i===0? '<span class="rank1">1</span>' : (i+1)),
     esc(teamName(cs,s.id)), "<b>"+s.pts+"</b>", s.j, s.v, s.n, s.d, s.bp, s.bc, (s.bp-s.bc>0?"+":"")+(s.bp-s.bc)
   ]);
-  return '<h3>'+title+'</h3>' + dataTable(headers, rows);
+  const h3style = poolIndex!=null ? ' style="color:'+poolColorVar(poolIndex)+';"' : '';
+  return '<h3'+h3style+'>'+title+'</h3>' + dataTable(headers, rows);
 }
 function statusLabel(m){
   if(m.status==="pending") return "À jouer";
@@ -1145,14 +1170,13 @@ function renderCategoryConfig(t, catKey, cs){
       }
       return '<tr><td>'+esc(e.nom)+'</td><td>'+colorCellHtml(catKey,e)+'</td>'+poolCell+'</tr>';
     }).join("");
-    poolAssignHtml = (showPool ? '<div class="auto-split-row"><button class="btn-auto-split" data-action="auto-split" data-cat="'+catKey+'">🔀 Répartir automatiquement</button></div>' : '')
-      + '<table class="pool-config-table"><tr><th>Équipe</th><th>Couleur</th>'+(showPool?"<th>Poule</th>":"")+'</tr>'+rows+'</table>';
+    poolAssignHtml = '<table class="pool-config-table"><tr><th>Équipe</th><th>Couleur</th>'+(showPool?"<th>Poule</th>":"")+'</tr>'+rows+'</table>';
   }
-  const generateButtonHtml = cs.equipes.length ? '<div class="generate-schedule-center"><button class="btn accent btn-generate" data-action="gen-schedule" data-cat="'+catKey+'">📅 '+(cs.matches.length?"Régénérer":"Générer")+' le calendrier</button></div>' : "";
+  const generateButtonHtml = cs.equipes.length ? '<div class="generate-schedule-center"><button class="btn accent btn-generate" data-action="gen-schedule" data-cat="'+catKey+'">📅 '+(cs.matches.length?"Régénérer":"Générer")+' les matchs</button></div>' : "";
   let poolSettingsHtml = "";
   const synced = cs.matchDuration!=null;
   const globalDurationHtml = '<div class="field-row" style="margin-top:14px;">'
-    + '<div class="field"><label>Durée des matchs (min)</label><input type="number" min="1" max="90" placeholder="Vide = par poule" value="'+(synced?cs.matchDuration:"")+'" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
+    + '<div class="field"><label>Durée des matchs (min)</label><input type="number" min="1" max="90" placeholder="Vide = par poule" value="'+(synced?cs.matchDuration:"")+'" onfocus="this.select()" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
     + '</div>'
     + (cs.poolCount>=2 ? '<p style="font-size:.78rem;color:var(--muted);margin:2px 0 10px;">Si cette case est complétée, la même durée s\'applique à toutes les poules. Si elle est vide, choisissez une durée différente pour chaque poule ci-dessous.</p>' : '');
   if(cs.poolCount>=2){
@@ -1203,6 +1227,7 @@ function renderCategoryConfig(t, catKey, cs){
     + '<label class="checkline"><input type="checkbox" '+(cs.rankingOptions.cl3e?"checked":"")+' onchange="toggleRankOpt(\''+catKey+'\',\'cl3e\',this.checked)"> Classement des 3e de poule (poules de 4)</label>'
     + '</div>'
   ) : "";
+  const autoSplitHtml = (cs.poolCount>=2 && cs.equipes.length) ? '<div class="auto-split-row"><button class="btn-auto-split" data-action="auto-split" data-cat="'+catKey+'">🔀 Répartir automatiquement</button></div>' : '';
   const collapsed = isCollapsed(catKey+"_config");
   return '<div class="card">'
     + '<h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_config"><span>⚙️ Configuration — <span style="color:var(--accent2)">'+esc(cs.equipes.length)+' équipe(s)</span> <span class="badge '+cs.stage.replace("é","e")+'">'+esc(cs.stage)+'</span></span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>'
@@ -1213,6 +1238,7 @@ function renderCategoryConfig(t, catKey, cs){
       + '</select></div>'
       + '<div class="field"><label>&nbsp;</label><button class="btn ghost" style="color:#334155;background:#eef1fb" data-action="reset-category" data-cat="'+catKey+'">↺ Réinitialiser</button></div>'
       + '</div>'
+      + autoSplitHtml
       + finalModeHtml
       + rankOpts
       + poolAssignHtml
@@ -1243,13 +1269,19 @@ function renderMatches(t, catKey, cs){
   if(!collapsed){
     const groupHtml = key=>{
       const list = byPhase[key];
-      const title = key.startsWith("poule") ? "Poule " + String.fromCharCode(65+parseInt(key.replace("poule",""),10)) : (key.indexOf("rang")===0 ? rangLabel(key) : PHASE_LABELS[key]);
-      return '<div class="phase-group"><div class="phase-title">🏐 '+title+'</div><div class="match-list">'
+      const isPool = key.startsWith("poule");
+      const poolIdx = isPool ? parseInt(key.replace("poule",""),10) : null;
+      const title = isPool ? "Poule " + String.fromCharCode(65+poolIdx) : (key.indexOf("rang")===0 ? rangLabel(key) : PHASE_LABELS[key]);
+      const titleStyle = isPool ? ' style="color:'+poolColorVar(poolIdx)+';"' : '';
+      return '<div class="phase-group"><div class="phase-title"'+titleStyle+'>🏐 '+title+'</div><div class="match-list">'
         + list.map(m=> renderMatchRow(cs, m, !hasLive)).join("")
         + '</div></div>';
     };
     if(poolKeys.length>1){
-      html += '<div class="pools-matches-row">' + poolKeys.map(k=>'<div>'+groupHtml(k)+'</div>').join("") + '</div>';
+      html += '<div class="pools-matches-row">' + poolKeys.map(k=>{
+        const idx = parseInt(k.replace("poule",""),10);
+        return '<div class="pool-color-block" style="--pc:'+poolColorVar(idx)+';--pt:'+poolTintVar(idx)+';">'+groupHtml(k)+'</div>';
+      }).join("") + '</div>';
     } else {
       poolKeys.forEach(k=> html += groupHtml(k));
     }
@@ -1267,7 +1299,7 @@ function renderStandings(t, catKey, cs){
       html += '<div class="standings-row">';
       cs.poules.forEach((p,i)=>{
         if(!p.length) return;
-        html += '<div>'+standingsTable(cs, poolStandings(cs,i), "Poule "+String.fromCharCode(65+i))+'</div>';
+        html += '<div class="pool-color-block" style="--pc:'+poolColorVar(i)+';--pt:'+poolTintVar(i)+';">'+standingsTable(cs, poolStandings(cs,i), "Poule "+String.fromCharCode(65+i), i)+'</div>';
       });
       html += '</div>';
     } else {
@@ -1373,6 +1405,10 @@ function renderTournamentBar(tab, ctx, tournament){
       html += '<option value="'+t.id+'" '+(t.id===ctx.currentId?"selected":"")+'>'+esc(t.nom)+' ('+d+')</option>';
     });
     html += '</select>';
+    if(tournament){
+      const tCollapsed = isCollapsed("tournamentBody");
+      html += '<button class="btn" data-action="toggle-section" data-section="tournamentBody" title="'+(tCollapsed?"Afficher":"Masquer")+' le tournoi">'+(tCollapsed?"▸":"▾")+' '+(tCollapsed?"Afficher":"Masquer")+'</button>';
+    }
     html += '<button class="btn" data-action="new-tournament">➕ Nouveau tournoi</button>';
     if(tournament) html += '<button class="btn danger" data-action="delete-tournament" data-id="'+tournament.id+'">🗑 Supprimer ce tournoi</button>';
   }
@@ -1402,7 +1438,7 @@ function render(){
   catTabsBar.classList.remove("hidden");
   const app = document.getElementById("app");
   let html = renderTournamentBar(tab, ctx, tournament);
-  html += tournament ? renderTournamentBody(tab, tournament) : renderNoTournament(tab);
+  html += tournament ? (isCollapsed("tournamentBody") ? "" : renderTournamentBody(tab, tournament)) : renderNoTournament(tab);
   app.innerHTML = html;
 }
 
