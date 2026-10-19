@@ -140,6 +140,7 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 .pool-config-table{width:100%;border-collapse:collapse;margin-top:8px;}
 .pool-config-table td,.pool-config-table th{padding:7px 10px;border-bottom:1px solid var(--line);font-size:.86rem;}
 .pool-config-table select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);font-weight:600;}
+.pool-config-table input[type=number]{width:62px;padding:6px;border-radius:8px;border:1px solid var(--line);text-align:center;font-weight:700;}
 
 .phase-group{margin-top:16px;}
 .phase-title{font-weight:800;color:#1e3a8a;font-size:.92rem;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
@@ -361,6 +362,7 @@ function liveMatchGlobal(){
 function createCategoryState(){
   return {
     equipes:[], poules:[], poolCount:1, matchDuration:10,
+    poolDurations:[], poolDoubleRound:[],
     rankingOptions:{ cl34:true, clDernier:true, cl3e:true },
     finalMode:"crossed",
     matches:[], refereeCounts:{}, stage:"setup"
@@ -486,7 +488,24 @@ function setPoolCount(cat, n){
   if(cs.matches.length && !confirm("Changer le nombre de poules réinitialisera le calendrier des matchs de cette catégorie. Continuer ?")) { render(); return; }
   cs.poolCount = n;
   cs.poules = Array.from({length:n}, ()=>[]);
+  cs.poolDurations = Array.from({length:n}, (_, i)=> (cs.poolDurations && cs.poolDurations[i]) || cs.matchDuration);
+  cs.poolDoubleRound = Array.from({length:n}, (_, i)=> !!(cs.poolDoubleRound && cs.poolDoubleRound[i]));
   cs.matches = []; cs.refereeCounts = {}; cs.stage = "setup";
+  saveDB(); render();
+}
+function setPoolDuration(cat, poolIndex, val){
+  const t = currentTournament(); const cs = t.categories[cat];
+  if(!cs.poolDurations) cs.poolDurations = [];
+  cs.poolDurations[poolIndex] = Math.max(1, Math.min(90, parseInt(val,10)||10));
+  saveDB(); render();
+}
+function togglePoolDoubleRound(cat, poolIndex, checked){
+  const t = currentTournament(); const cs = t.categories[cat];
+  if(!cs.poolDoubleRound) cs.poolDoubleRound = [];
+  const hadMatches = cs.matches.length>0;
+  if(hadMatches && !confirm("Changer ce réglage réinitialisera le calendrier des matchs de cette catégorie. Continuer ?")){ render(); return; }
+  cs.poolDoubleRound[poolIndex] = checked;
+  if(hadMatches){ cs.matches = []; cs.refereeCounts = {}; cs.stage = "setup"; }
   saveDB(); render();
 }
 function assignPoule(cat, teamId, poolIndexStr){
@@ -517,7 +536,7 @@ function setDuration(cat, val){
 }
 
 /* ===================== GENERATION CALENDRIER ===================== */
-function roundRobinRounds(ids){
+function roundRobinRounds(ids, doubleRound){
   const teams = ids.slice();
   if(teams.length % 2 !== 0) teams.push(null);
   const n = teams.length;
@@ -534,6 +553,10 @@ function roundRobinRounds(ids){
     const last = arr[n-1];
     for(let i=n-1;i>1;i--) arr[i]=arr[i-1];
     arr[1]=last;
+  }
+  if(doubleRound){
+    const returnLeg = rounds.map(pairs=> pairs.map(([a,b])=>[b,a]));
+    return rounds.concat(returnLeg);
   }
   return rounds;
 }
@@ -563,7 +586,7 @@ function genSchedule(cat){
   if(!allAssigned || !poolsOk){ alert("Merci d'affecter toutes les équipes à une poule (au moins 2 équipes par poule)."); return; }
   if(cs.matches.length && !confirm("Regénérer le calendrier effacera les résultats existants de cette catégorie. Continuer ?")) return;
   cs.refereeCounts = {};
-  const poolRounds = cs.poules.map(teamIds=>roundRobinRounds(teamIds));
+  const poolRounds = cs.poules.map((teamIds,idx)=>roundRobinRounds(teamIds, cs.poolDoubleRound && cs.poolDoubleRound[idx]));
   const maxRounds = Math.max(...poolRounds.map(r=>r.length));
   const matches = [];
   for(let r=0;r<maxRounds;r++){
@@ -741,9 +764,13 @@ function maybeGenerateFinalPhase(catKey){
 }
 
 /* ===================== DEROULE D'UN MATCH ===================== */
+function matchDurationMinutes(cs, m){
+  if(m.phase==="poule" && cs.poolDurations && cs.poolDurations[m.poolIndex]!=null) return cs.poolDurations[m.poolIndex];
+  return cs.matchDuration;
+}
 function remainingSeconds(cs, m){
   const elapsed = m.timer.accumulatedSec + (m.timer.running ? (nowSec()-m.timer.startedAt) : 0);
-  return cs.matchDuration*60 - elapsed;
+  return matchDurationMinutes(cs,m)*60 - elapsed;
 }
 function formatRemaining(cs, m){
   const rem = remainingSeconds(cs,m);
@@ -966,7 +993,7 @@ function renderLiveBanner(){
       +     '<div id="chronoDisplay">'+formatRemaining(cs,m)+'</div>'
       +     '<button class="chrono-reset-btn" data-action="reset-timer" data-id="'+m.id+'" title="Remettre le chrono au début">⟲</button>'
       +   '</div>'
-      +   '<div class="live-sub">Durée réglée : '+cs.matchDuration+' min · Arbitrage : '+(m.refereeTeamId?esc(teamName(cs,m.refereeTeamId)):"—")+'</div></div>'
+      +   '<div class="live-sub">Durée réglée : '+matchDurationMinutes(cs,m)+' min · Arbitrage : '+(m.refereeTeamId?esc(teamName(cs,m.refereeTeamId)):"—")+'</div></div>'
       + '<div class="team-score-btn" data-action="goal-plus" data-id="'+m.id+'" data-team="B">'
       +   '<div class="tname">'+teamColorDot(cs,m.teamB)+esc(teamName(cs,m.teamB))+'</div><div class="tscore">'+m.scoreB+'</div>'
       +   '<button class="minus-btn" data-action="goal-minus" data-id="'+m.id+'" data-team="B">-1</button></div>'
@@ -1054,6 +1081,20 @@ function renderCategoryConfig(t, catKey, cs){
     poolAssignHtml = '<table class="pool-config-table"><tr><th>Équipe</th><th>Couleur</th>'+(showPool?"<th>Poule</th>":"")+'</tr>'+rows+'</table>'
       + (showPool ? '<button class="btn small" data-action="auto-split" data-cat="'+catKey+'" style="margin-top:8px;">🔀 Répartir automatiquement</button>' : '');
   }
+  let poolSettingsHtml = "";
+  if(cs.poolCount>=2){
+    const rows = [];
+    for(let i=0;i<cs.poolCount;i++){
+      const dur = (cs.poolDurations && cs.poolDurations[i]!=null) ? cs.poolDurations[i] : cs.matchDuration;
+      const dbl = !!(cs.poolDoubleRound && cs.poolDoubleRound[i]);
+      const n = cs.poules[i] ? cs.poules[i].length : 0;
+      rows.push('<tr><td>Poule '+String.fromCharCode(65+i)+' ('+n+' équipe'+(n>1?"s":"")+')</td>'
+        + '<td><input type="number" min="1" max="90" value="'+dur+'" onchange="setPoolDuration(\''+catKey+'\','+i+',this.value)"></td>'
+        + '<td><label class="checkline"><input type="checkbox" '+(dbl?"checked":"")+' onchange="togglePoolDoubleRound(\''+catKey+'\','+i+',this.checked)"> Matchs aller-retour</label></td></tr>');
+    }
+    poolSettingsHtml = '<table class="pool-config-table"><tr><th>Poule</th><th>Durée d\'un match (min)</th><th>Format</th></tr>'+rows.join("")+'</table>'
+      + '<p style="font-size:.78rem;color:var(--muted);margin:6px 0 0;">Si les poules n\'ont pas le même nombre d\'équipes, ajustez la durée et/ou activez l\'aller-retour pour équilibrer le temps de jeu de chaque élève.</p>';
+  }
   const finalModeHtml = cs.poolCount===2 ? (
     '<div class="field-row">'
     + '<div class="field"><label>Mode de phase finale</label><select onchange="setFinalMode(\''+catKey+'\',this.value)">'
@@ -1077,10 +1118,11 @@ function renderCategoryConfig(t, catKey, cs){
       + '<div class="field"><label>Nombre de poules</label><select onchange="setPoolCount(\''+catKey+'\',this.value)">'
       + [1,2,3,4,5,6].map(function(n){ return '<option value="'+n+'" '+(cs.poolCount===n?"selected":"")+'>'+n+' poule'+(n>1?"s":"")+'</option>'; }).join("")
       + '</select></div>'
-      + '<div class="field"><label>Durée d\'un match (min)</label><input type="number" min="1" max="90" value="'+cs.matchDuration+'" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
+      + '<div class="field"><label>Durée '+(cs.poolCount>=2?"phase finale":"d\'un match")+' (min)</label><input type="number" min="1" max="90" value="'+cs.matchDuration+'" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
       + '<div class="field"><label>&nbsp;</label><button class="btn accent" data-action="gen-schedule" data-cat="'+catKey+'">📅 '+(cs.matches.length?"Régénérer":"Générer")+' le calendrier</button></div>'
       + '<div class="field"><label>&nbsp;</label><button class="btn ghost" style="color:#334155;background:#eef1fb" data-action="reset-category" data-cat="'+catKey+'">↺ Réinitialiser</button></div>'
       + '</div>'
+      + poolSettingsHtml
       + finalModeHtml
       + rankOpts
       + poolAssignHtml) : '')
