@@ -142,6 +142,25 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 .pool-config-table select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);font-weight:600;}
 .pool-config-table input[type=number]{width:62px;padding:6px;border-radius:8px;border:1px solid var(--line);text-align:center;font-weight:700;}
 
+.pool-settings-label{font-size:.78rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.3px;margin:14px 0 8px;}
+.pool-settings-grid{display:flex;flex-wrap:wrap;gap:14px;}
+.pool-settings-card{flex:1;min-width:240px;background:linear-gradient(160deg,#f8fafc,#eef1fb);border:1px solid var(--line);border-radius:14px;padding:14px 16px;}
+.pool-settings-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.pool-badge{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;color:#fff;font-weight:800;font-size:.95rem;flex:0 0 auto;box-shadow:0 2px 6px rgba(0,0,0,.2);}
+.pool-settings-title{font-weight:800;color:var(--ink);font-size:.95rem;}
+.pool-settings-sub{font-size:.78rem;color:var(--muted);}
+.pool-settings-body{display:flex;flex-direction:column;gap:10px;}
+.pool-settings-duration{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.85rem;font-weight:600;color:#334155;}
+.pool-settings-duration input{width:62px;padding:7px;border-radius:8px;border:1px solid var(--line);text-align:center;font-weight:800;font-size:.95rem;}
+.toggle-switch{position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;font-size:.85rem;font-weight:600;color:#334155;}
+.toggle-switch input{position:absolute;opacity:0;width:0;height:0;}
+.toggle-switch .track{width:40px;height:22px;background:#cbd5e1;border-radius:999px;position:relative;transition:background .15s;flex:0 0 auto;}
+.toggle-switch .track::before{content:"";position:absolute;left:2px;top:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.3);}
+.toggle-switch input:checked + .track{background:#1d4ed8;}
+.toggle-switch input:checked + .track::before{transform:translateX(18px);}
+.generate-schedule-center{text-align:center;margin-top:20px;padding-top:16px;border-top:1px dashed var(--line);}
+.btn-generate{font-size:1rem;padding:13px 32px;box-shadow:0 4px 14px rgba(234,88,12,.35);}
+
 .phase-group{margin-top:16px;}
 .phase-title{font-weight:800;color:#1e3a8a;font-size:.92rem;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
 .match-list{display:flex;flex-direction:column;gap:8px;}
@@ -473,6 +492,13 @@ function handleEstabKeydown(event, estab, cat, rowIndex){
   if(nextInput){ nextInput.focus(); nextInput.select(); return; }
   const nextSelect = document.getElementById("estabSelect_"+(rowIndex+1));
   if(nextSelect) nextSelect.focus();
+}
+function handlePoolDurationKeydown(event, cat, poolIndex){
+  if(event.key!=="Enter") return;
+  event.preventDefault();
+  setPoolDuration(cat, poolIndex, event.target.value);
+  const nextInput = document.getElementById("poolDurInput_"+(poolIndex+1));
+  if(nextInput){ nextInput.focus(); nextInput.select(); }
 }
 function resetCategory(cat){
   if(!confirm("Réinitialiser les poules et le calendrier de cette catégorie ? Les résultats seront perdus.")) return;
@@ -1079,21 +1105,30 @@ function renderCategoryConfig(t, catKey, cs){
       return '<tr><td>'+esc(e.nom)+'</td><td>'+colorCellHtml(catKey,e)+'</td>'+poolCell+'</tr>';
     }).join("");
     poolAssignHtml = '<table class="pool-config-table"><tr><th>Équipe</th><th>Couleur</th>'+(showPool?"<th>Poule</th>":"")+'</tr>'+rows+'</table>'
-      + (showPool ? '<button class="btn small" data-action="auto-split" data-cat="'+catKey+'" style="margin-top:8px;">🔀 Répartir automatiquement</button>' : '');
+      + (showPool ? '<div style="margin-top:10px;"><button class="btn small" data-action="auto-split" data-cat="'+catKey+'">🔀 Répartir automatiquement</button></div>' : '')
+      + '<div class="generate-schedule-center"><button class="btn accent btn-generate" data-action="gen-schedule" data-cat="'+catKey+'">📅 '+(cs.matches.length?"Régénérer":"Générer")+' le calendrier</button></div>';
   }
   let poolSettingsHtml = "";
   if(cs.poolCount>=2){
-    const rows = [];
+    const cards = [];
     for(let i=0;i<cs.poolCount;i++){
       const dur = (cs.poolDurations && cs.poolDurations[i]!=null) ? cs.poolDurations[i] : cs.matchDuration;
       const dbl = !!(cs.poolDoubleRound && cs.poolDoubleRound[i]);
       const n = cs.poules[i] ? cs.poules[i].length : 0;
-      rows.push('<tr><td>Poule '+String.fromCharCode(65+i)+' ('+n+' équipe'+(n>1?"s":"")+')</td>'
-        + '<td><input type="number" min="1" max="90" value="'+dur+'" onchange="setPoolDuration(\''+catKey+'\','+i+',this.value)"></td>'
-        + '<td><label class="checkline"><input type="checkbox" '+(dbl?"checked":"")+' onchange="togglePoolDoubleRound(\''+catKey+'\','+i+',this.checked)"> Matchs aller-retour</label></td></tr>');
+      cards.push(
+        '<div class="pool-settings-card">'
+        + '<div class="pool-settings-head"><span class="pool-badge" style="background:var(--col'+(i%8)+'-h)">'+String.fromCharCode(65+i)+'</span>'
+        + '<div><div class="pool-settings-title">Poule '+String.fromCharCode(65+i)+'</div><div class="pool-settings-sub">'+n+' équipe'+(n>1?"s":"")+'</div></div></div>'
+        + '<div class="pool-settings-body">'
+        + '<label class="pool-settings-duration">⏱ Durée d\'un match (min)<input type="number" min="1" max="90" value="'+dur+'" id="poolDurInput_'+i+'"'
+        + ' onfocus="this.select()" onchange="setPoolDuration(\''+catKey+'\','+i+',this.value)" onkeydown="handlePoolDurationKeydown(event,\''+catKey+'\','+i+')"></label>'
+        + '<label class="toggle-switch">🔁 Matchs aller-retour<input type="checkbox" '+(dbl?"checked":"")+' onchange="togglePoolDoubleRound(\''+catKey+'\','+i+',this.checked)"><span class="track"></span></label>'
+        + '</div></div>'
+      );
     }
-    poolSettingsHtml = '<table class="pool-config-table"><tr><th>Poule</th><th>Durée d\'un match (min)</th><th>Format</th></tr>'+rows.join("")+'</table>'
-      + '<p style="font-size:.78rem;color:var(--muted);margin:6px 0 0;">Si les poules n\'ont pas le même nombre d\'équipes, ajustez la durée et/ou activez l\'aller-retour pour équilibrer le temps de jeu de chaque élève.</p>';
+    poolSettingsHtml = '<div class="pool-settings-label">Réglages par poule</div>'
+      + '<div class="pool-settings-grid">'+cards.join("")+'</div>'
+      + '<p style="font-size:.78rem;color:var(--muted);margin:10px 0 0;">Si les poules n\'ont pas le même nombre d\'équipes, ajustez la durée et/ou activez l\'aller-retour pour équilibrer le temps de jeu de chaque élève.</p>';
   }
   const finalModeHtml = cs.poolCount===2 ? (
     '<div class="field-row">'
@@ -1119,7 +1154,6 @@ function renderCategoryConfig(t, catKey, cs){
       + [1,2,3,4,5,6].map(function(n){ return '<option value="'+n+'" '+(cs.poolCount===n?"selected":"")+'>'+n+' poule'+(n>1?"s":"")+'</option>'; }).join("")
       + '</select></div>'
       + '<div class="field"><label>Durée '+(cs.poolCount>=2?"phase finale":"d\'un match")+' (min)</label><input type="number" min="1" max="90" value="'+cs.matchDuration+'" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
-      + '<div class="field"><label>&nbsp;</label><button class="btn accent" data-action="gen-schedule" data-cat="'+catKey+'">📅 '+(cs.matches.length?"Régénérer":"Générer")+' le calendrier</button></div>'
       + '<div class="field"><label>&nbsp;</label><button class="btn ghost" style="color:#334155;background:#eef1fb" data-action="reset-category" data-cat="'+catKey+'">↺ Réinitialiser</button></div>'
       + '</div>'
       + poolSettingsHtml
