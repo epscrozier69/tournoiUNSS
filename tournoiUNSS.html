@@ -337,6 +337,7 @@ function currentTournament(){
   return ctx.tournaments.find(t=>t.id===ctx.currentId) || null;
 }
 function teamName(cs, id){
+  if(id==null) return "— Exempt —";
   const e = cs.equipes.find(e=>e.id===id);
   return e ? e.nom : "?";
 }
@@ -613,16 +614,24 @@ function poolMatchCount(cs, poolIndex){
   return dbl ? single*2 : single;
 }
 function estimateFinalPhaseMatches(cs){
-  if(cs.poolCount!==2) return 0;
-  const n0 = cs.poules[0] ? cs.poules[0].length : 0;
-  const n1 = cs.poules[1] ? cs.poules[1].length : 0;
-  if(n0<2 || n1<2) return 0;
-  if(cs.finalMode==="sameRank") return Math.min(n0, n1);
-  let count = 3; // demi1, demi2, finale
-  if(cs.rankingOptions.cl34) count++;
-  if(cs.rankingOptions.clDernier) count++;
-  if(cs.rankingOptions.cl3e && n0>=4 && n1>=4) count++;
-  return count;
+  if(cs.poolCount<2) return 0;
+  const sizes = [];
+  for(let i=0;i<cs.poolCount;i++) sizes.push(cs.poules[i] ? cs.poules[i].length : 0);
+  if(sizes.some(s=>s<2)) return 0;
+  if(cs.poolCount===2){
+    if(cs.finalMode==="sameRank") return Math.min(sizes[0], sizes[1]);
+    let count = 3; // demi1, demi2, finale
+    if(cs.rankingOptions.cl34) count++;
+    if(cs.rankingOptions.clDernier) count++;
+    if(cs.rankingOptions.cl3e && sizes[0]>=4 && sizes[1]>=4) count++;
+    return count;
+  }
+  if(cs.finalMode==="sameRank"){
+    const minSize = Math.min(...sizes);
+    const perTier = cs.poolCount*(cs.poolCount-1)/2;
+    return minSize*perTier;
+  }
+  return 2*cs.poolCount - 1; // tableau à élimination directe : K participants = K-1 matchs
 }
 function formatMinutes(mins){
   if(mins<60) return mins+" min";
@@ -724,8 +733,66 @@ function winnerOf(m){
 }
 function loserOf(m){ const w = winnerOf(m); return w===m.teamA ? m.teamB : m.teamA; }
 
+function computeSameRankRankingN(cs){
+  const standingsByPool = [];
+  for(let p=0;p<cs.poolCount;p++) standingsByPool.push(poolStandings(cs,p));
+  const minLen = Math.min(...standingsByPool.map(s=>s.length));
+  const groups = [];
+  for(let i=0;i<minLen;i++){
+    const tierTeamIds = standingsByPool.map(s=>s[i].id);
+    const tierStandings = computeStandingsFor(cs, tierTeamIds, m=>typeof m.phase==="string" && m.phase.indexOf("rtier"+i+"_")===0);
+    let idx=0;
+    while(idx<tierStandings.length){
+      const ref = tierStandings[idx];
+      const tied=[ref.id];
+      let j=idx+1;
+      while(j<tierStandings.length && tierStandings[j].pts===ref.pts && (tierStandings[j].bp-tierStandings[j].bc)===(ref.bp-ref.bc) && tierStandings[j].bp===ref.bp){
+        tied.push(tierStandings[j].id); j++;
+      }
+      groups.push({teamIds:tied, tied:tied.length>1});
+      idx=j;
+    }
+  }
+  const maxLen = Math.max(...standingsByPool.map(s=>s.length));
+  for(let pos=minLen; pos<maxLen; pos++){
+    const tierTeams = [];
+    standingsByPool.forEach(s=>{ if(s[pos]) tierTeams.push(s[pos].id); });
+    if(tierTeams.length) groups.push({teamIds:tierTeams, tied:tierTeams.length>1});
+  }
+  return groups;
+}
+function computeEliminationRankingN(cs){
+  const elimMatches = cs.matches.filter(m=>typeof m.phase==="string" && m.phase.indexOf("elimR")===0);
+  if(!elimMatches.length) return null;
+  let maxRound = 0;
+  elimMatches.forEach(m=>{ const r=parseInt(m.phase.split("_")[0].replace("elimR",""),10); if(r>maxRound) maxRound=r; });
+  const finalRoundMatches = elimMatches.filter(m=>parseInt(m.phase.split("_")[0].replace("elimR",""),10)===maxRound);
+  if(finalRoundMatches.length!==1 || finalRoundMatches[0].status!=="done") return null;
+  const finalMatch = finalRoundMatches[0];
+  const groups = [];
+  groups.push({teamIds:[winnerOf(finalMatch)], tied:false});
+  groups.push({teamIds:[loserOf(finalMatch)], tied:false});
+  for(let r=maxRound-1; r>=1; r--){
+    const roundMatches = elimMatches.filter(m=>parseInt(m.phase.split("_")[0].replace("elimR",""),10)===r && m.teamB!=null);
+    if(!roundMatches.length) continue;
+    const losers = roundMatches.map(m=>loserOf(m));
+    if(losers.length) groups.push({teamIds:losers, tied: losers.length>1});
+  }
+  const standingsByPool = [];
+  for(let p=0;p<cs.poolCount;p++) standingsByPool.push(poolStandings(cs,p));
+  const maxLen = Math.max(...standingsByPool.map(s=>s.length));
+  for(let pos=2; pos<maxLen; pos++){
+    const tierTeams = [];
+    standingsByPool.forEach(s=>{ if(s[pos]) tierTeams.push(s[pos].id); });
+    if(tierTeams.length) groups.push({teamIds:tierTeams, tied:tierTeams.length>1});
+  }
+  return groups;
+}
 function computeFinalRanking(cs){
-  if(cs.poolCount!==2 || cs.stage!=="terminé") return null;
+  if(cs.poolCount<2 || cs.stage!=="terminé") return null;
+  if(cs.poolCount>=3){
+    return cs.finalMode==="sameRank" ? computeSameRankRankingN(cs) : computeEliminationRankingN(cs);
+  }
   if(cs.finalMode==="sameRank"){
     const rangMatches = cs.matches.filter(m=>typeof m.phase==="string" && m.phase.indexOf("rang")===0)
       .sort((a,b)=>parseInt(a.phase.replace("rang",""),10)-parseInt(b.phase.replace("rang",""),10));
@@ -791,14 +858,98 @@ function setFinalMode(cat, mode){
   maybeGenerateFinalPhase(cat);
   render();
 }
+function generateSameRankPhaseN(cs, pouleDone){
+  const hasTier = cs.matches.some(m=>typeof m.phase==="string" && m.phase.indexOf("rtier")===0);
+  if(pouleDone && !hasTier){
+    const standingsByPool = [];
+    for(let p=0;p<cs.poolCount;p++) standingsByPool.push(poolStandings(cs,p));
+    const minLen = Math.min(...standingsByPool.map(s=>s.length));
+    const extra = [];
+    for(let i=0;i<minLen;i++){
+      const tierTeamIds = standingsByPool.map(s=>s[i].id);
+      const rounds = roundRobinRounds(tierTeamIds, false);
+      rounds.forEach((round,ri)=>{
+        round.forEach(([a,b],mi)=>{
+          extra.push(newMatch("rtier"+i+"_"+ri+"_"+mi, null, a, b));
+        });
+      });
+    }
+    assignRefereesInOrder(cs, extra);
+    cs.matches.push(...extra);
+    cs.stage = "finale";
+  }
+  const tierMatches = cs.matches.filter(m=>typeof m.phase==="string" && m.phase.indexOf("rtier")===0);
+  if(tierMatches.length && tierMatches.every(m=>m.status==="done")) cs.stage = "terminé";
+}
+function advanceEliminationRounds(cs){
+  let round = 1;
+  while(true){
+    const roundMatches = cs.matches.filter(m=> m.phase && m.phase.indexOf("elimR"+round+"_")===0);
+    if(!roundMatches.length) return;
+    if(!roundMatches.every(m=>m.status==="done")) return;
+    if(roundMatches.length===1) return;
+    const already = cs.matches.some(m=> m.phase && m.phase.indexOf("elimR"+(round+1)+"_")===0);
+    if(!already){
+      const winners = roundMatches.slice()
+        .sort((a,b)=> parseInt(a.phase.split("_")[1],10)-parseInt(b.phase.split("_")[1],10))
+        .map(m=>winnerOf(m));
+      const extra = [];
+      for(let i=0;i<winners.length;i+=2){
+        const bTeam = winners[i+1]!=null ? winners[i+1] : null;
+        extra.push(newMatch("elimR"+(round+1)+"_"+(i/2), null, winners[i], bTeam));
+      }
+      extra.forEach(m=>{ if(m.teamB==null){ m.status = "done"; m.resultType = "normal"; } });
+      assignRefereesInOrder(cs, extra.filter(m=>m.teamB!=null));
+      cs.matches.push(...extra);
+    }
+    round++;
+  }
+}
+function generateEliminationBracket(cs, pouleDone){
+  const hasElim = cs.matches.some(m=>typeof m.phase==="string" && m.phase.indexOf("elimR")===0);
+  if(pouleDone && !hasElim){
+    const standingsByPool = [];
+    for(let p=0;p<cs.poolCount;p++) standingsByPool.push(poolStandings(cs,p));
+    if(standingsByPool.every(s=>s.length>=2)){
+      const order = [];
+      for(let p=0;p<cs.poolCount;p++) order.push(standingsByPool[p][0].id);
+      for(let p=0;p<cs.poolCount;p++) order.push(standingsByPool[p][1].id);
+      const extra = [];
+      for(let i=0;i<order.length;i+=2){
+        const bTeam = order[i+1]!=null ? order[i+1] : null;
+        extra.push(newMatch("elimR1_"+(i/2), null, order[i], bTeam));
+      }
+      extra.forEach(m=>{ if(m.teamB==null){ m.status = "done"; m.resultType = "normal"; } });
+      assignRefereesInOrder(cs, extra.filter(m=>m.teamB!=null));
+      cs.matches.push(...extra);
+      cs.stage = "finale";
+    }
+  }
+  advanceEliminationRounds(cs);
+  const elimMatches = cs.matches.filter(m=>typeof m.phase==="string" && m.phase.indexOf("elimR")===0);
+  if(elimMatches.length){
+    let maxRound = 0;
+    elimMatches.forEach(m=>{ const r=parseInt(m.phase.split("_")[0].replace("elimR",""),10); if(r>maxRound) maxRound=r; });
+    const lastRoundMatches = elimMatches.filter(m=>parseInt(m.phase.split("_")[0].replace("elimR",""),10)===maxRound);
+    if(lastRoundMatches.length===1 && lastRoundMatches[0].status==="done"){
+      cs.stage = "terminé";
+    }
+  }
+}
 function maybeGenerateFinalPhase(catKey){
   const t = currentTournament(); const cs = t.categories[catKey];
-  if(cs.poolCount!==2){
+  if(cs.poolCount<2){
     if(cs.matches.length && cs.matches.every(m=>m.status==="done")) cs.stage = "terminé";
     saveDB(); return;
   }
   const pouleMatches = cs.matches.filter(m=>m.phase==="poule");
   const pouleDone = pouleMatches.length>0 && pouleMatches.every(m=>m.status==="done");
+  if(cs.poolCount>=3){
+    if(cs.finalMode==="sameRank") generateSameRankPhaseN(cs, pouleDone);
+    else generateEliminationBracket(cs, pouleDone);
+    saveDB();
+    return;
+  }
   if(cs.finalMode==="sameRank"){
     const hasRang = cs.matches.some(m=>typeof m.phase==="string" && m.phase.indexOf("rang")===0);
     if(pouleDone && !hasRang){
@@ -945,6 +1096,13 @@ function cascadeRemoveDependents(cs, m){
       cs.matches = cs.matches.filter(x=>x.phase!=="finale" && x.phase!=="cl34");
       cs.stage = "demis";
     }
+  } else if(typeof m.phase==="string" && m.phase.indexOf("elimR")===0){
+    const round = parseInt(m.phase.split("_")[0].replace("elimR",""),10);
+    const hasLater = cs.matches.some(x=> typeof x.phase==="string" && x.phase.indexOf("elimR")===0 && parseInt(x.phase.split("_")[0].replace("elimR",""),10) > round);
+    if(hasLater){
+      cs.matches = cs.matches.filter(x=> !(typeof x.phase==="string" && x.phase.indexOf("elimR")===0 && parseInt(x.phase.split("_")[0].replace("elimR",""),10) > round));
+      cs.stage = "finale";
+    }
   } else if(cs.stage==="terminé"){
     cs.stage = "finale";
   }
@@ -999,16 +1157,24 @@ function dataTable(headers, rows){
   h += '</tbody></table></div>';
   return h;
 }
-function poolColorVar(i){ return 'var(--col'+(i%8)+'-h)'; }
-function poolTintVar(i){ return 'var(--col'+(i%8)+'-c)'; }
+const POOL_PALETTE = [
+  {solid:"#1d4ed8", tint:"#dbeafe"}, // bleu
+  {solid:"#dc2626", tint:"#fee2e2"}, // rouge
+  {solid:"#ea580c", tint:"#ffedd5"}, // orange
+  {solid:"#7c3aed", tint:"#ede9fe"}, // violet
+  {solid:"#db2777", tint:"#fce7f3"}, // rose
+  {solid:"#0ea5e9", tint:"#e0f2fe"}  // bleu ciel
+];
+function poolColorVar(i){ return POOL_PALETTE[i%POOL_PALETTE.length].solid; }
+function poolTintVar(i){ return POOL_PALETTE[i%POOL_PALETTE.length].tint; }
 function standingsTable(cs, standings, title, poolIndex){
   const headers = ["#","Équipe","Pts","J","V","N","D","BP","BC","Diff"];
   const rows = standings.map((s,i)=>[
     (i===0? '<span class="rank1">1</span>' : (i+1)),
     esc(teamName(cs,s.id)), "<b>"+s.pts+"</b>", s.j, s.v, s.n, s.d, s.bp, s.bc, (s.bp-s.bc>0?"+":"")+(s.bp-s.bc)
   ]);
-  const h3style = poolIndex!=null ? ' style="color:'+poolColorVar(poolIndex)+';"' : '';
-  return '<h3'+h3style+'>'+title+'</h3>' + dataTable(headers, rows);
+  if(poolIndex!=null) return dataTable(headers, rows);
+  return '<h3>'+title+'</h3>' + dataTable(headers, rows);
 }
 function statusLabel(m){
   if(m.status==="pending") return "À jouer";
@@ -1028,6 +1194,7 @@ function resultBadgeText(cs, m){
 }
 function matchWinnerId(m){
   if(m.status!=="done") return null;
+  if(m.teamB==null) return m.teamA;
   if(m.resultType==="abandonA") return m.teamB;
   if(m.resultType==="abandonB") return m.teamA;
   if(m.scoreA>m.scoreB) return m.teamA;
@@ -1108,9 +1275,22 @@ function rangLabel(phase){
   const first = 2*(n-1)+1, second = first+1;
   return n===1 ? "Finale — 1ers de poule (places "+first+"-"+second+")" : "Classement — places "+first+"-"+second;
 }
+function tierLabel(key){
+  const i = parseInt(key.replace("rtier",""),10);
+  return "Classement — "+(i===0?"1ers":(i+1)+"èmes")+" de poule";
+}
+function elimRoundLabel(key, cs){
+  const round = parseInt(key.replace("elimR",""),10);
+  const totalRounds = 1 + Math.ceil(Math.log2(cs.poolCount));
+  if(round>=totalRounds) return "🏆 Finale";
+  if(round===totalRounds-1) return "Demi-finales";
+  return "Tour "+round+" — élimination directe";
+}
 function PHASE_LABEL_OR_POULE(cs,m){
   if(m.phase==="poule") return "Poule " + String.fromCharCode(65+m.poolIndex);
   if(typeof m.phase==="string" && m.phase.indexOf("rang")===0) return rangLabel(m.phase);
+  if(typeof m.phase==="string" && m.phase.indexOf("rtier")===0) return tierLabel("rtier"+m.phase.replace("rtier","").split("_")[0]);
+  if(typeof m.phase==="string" && m.phase.indexOf("elimR")===0) return elimRoundLabel(m.phase.split("_")[0], cs);
   return PHASE_LABELS[m.phase] || m.phase;
 }
 
@@ -1172,16 +1352,17 @@ function renderCategoryConfig(t, catKey, cs){
     }).join("");
     poolAssignHtml = '<table class="pool-config-table"><tr><th>Équipe</th><th>Couleur</th>'+(showPool?"<th>Poule</th>":"")+'</tr>'+rows+'</table>';
   }
-  const generateButtonHtml = cs.equipes.length ? '<div class="generate-schedule-center"><button class="btn accent btn-generate" data-action="gen-schedule" data-cat="'+catKey+'">📅 '+(cs.matches.length?"Régénérer":"Générer")+' les matchs</button></div>' : "";
+  const generateButtonHtml = cs.equipes.length ? '<div class="generate-schedule-center"><button class="btn accent btn-generate" data-action="gen-schedule" data-cat="'+catKey+'">📅 Générer les matchs</button></div>' : "";
   let poolSettingsHtml = "";
   const synced = cs.matchDuration!=null;
   const globalDurationHtml = '<div class="field-row" style="margin-top:14px;">'
     + '<div class="field"><label>Durée des matchs (min)</label><input type="number" min="1" max="90" placeholder="Vide = par poule" value="'+(synced?cs.matchDuration:"")+'" onfocus="this.select()" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
     + '</div>'
     + (cs.poolCount>=2 ? '<p style="font-size:.78rem;color:var(--muted);margin:2px 0 10px;">Si cette case est complétée, la même durée s\'applique à toutes les poules. Si elle est vide, choisissez une durée différente pour chaque poule ci-dessous.</p>' : '');
+  let totalTournamentMin = 0;
+  let nbPoulesJouees = 0;
   if(cs.poolCount>=2){
     const cards = [];
-    let totalTournamentMin = 0;
     for(let i=0;i<cs.poolCount;i++){
       const dur = synced ? cs.matchDuration : ((cs.poolDurations && cs.poolDurations[i]!=null) ? cs.poolDurations[i] : 10);
       const dbl = !!(cs.poolDoubleRound && cs.poolDoubleRound[i]);
@@ -1189,6 +1370,7 @@ function renderCategoryConfig(t, catKey, cs){
       const nbMatches = poolMatchCount(cs, i);
       const totalMin = nbMatches*dur;
       totalTournamentMin += totalMin;
+      nbPoulesJouees++;
       cards.push(
         '<div class="pool-settings-card">'
         + '<div class="pool-settings-head"><span class="pool-badge" style="background:var(--col'+(i%8)+'-h)">'+String.fromCharCode(65+i)+'</span>'
@@ -1201,21 +1383,33 @@ function renderCategoryConfig(t, catKey, cs){
         + '</div></div>'
       );
     }
+    poolSettingsHtml = '<div class="pool-settings-label">Réglages par poule'+(synced?' <span style="font-weight:600;color:var(--accent);">🔗 durée synchronisée</span>':'')+'</div>'
+      + '<div class="pool-settings-grid">'+cards.join("")+'</div>';
+  } else if(cs.equipes.length>=2){
+    const dur = synced ? cs.matchDuration : 10;
+    const n = cs.equipes.length;
+    const nbMatches = n*(n-1)/2;
+    totalTournamentMin = nbMatches*dur;
+    nbPoulesJouees = 1;
+  }
+  let totalSummaryHtml = "";
+  if(totalTournamentMin>0 || estimateFinalPhaseMatches(cs)>0){
     const finalDur = synced ? cs.matchDuration : 10;
     const finalCount = estimateFinalPhaseMatches(cs);
     const finalTotalMin = finalCount*finalDur;
-    poolSettingsHtml = '<div class="pool-settings-label">Réglages par poule'+(synced?' <span style="font-weight:600;color:var(--accent);">🔗 durée synchronisée</span>':'')+'</div>'
-      + '<div class="pool-settings-grid">'+cards.join("")+'</div>'
-      + '<div class="pool-total-summary">'
-      +   '<div>⏳ Phase de poule ('+cards.length+' poule'+(cards.length>1?"s":"")+' jouées à la suite) : <b>'+formatMinutes(totalTournamentMin)+'</b></div>'
+    totalSummaryHtml = '<div class="pool-total-summary">'
+      +   '<div>⏳ Phase de poule'+(nbPoulesJouees>1?(' ('+nbPoulesJouees+' poules jouées à la suite)'):'')+' : <b>'+formatMinutes(totalTournamentMin)+'</b></div>'
       +   (finalCount>0 ? '<div>🏆 Phase finale ('+finalCount+' match'+(finalCount>1?"s":"")+' × '+finalDur+' min) : <b>'+formatMinutes(finalTotalMin)+'</b></div>' : '')
       +   '<div class="pool-total-grand">Temps total du tournoi : <b>'+formatMinutes(totalTournamentMin+finalTotalMin)+'</b></div>'
       + '</div>';
   }
-  const finalModeHtml = cs.poolCount===2 ? (
+  const crossedLabel = cs.poolCount===2
+    ? "Demi-finales croisées (1er vs 2e, finale, classements)"
+    : "Élimination directe (tableau à élimination, 2 qualifiés par poule)";
+  const finalModeHtml = cs.poolCount>=2 ? (
     '<div class="field-row">'
     + '<div class="field"><label>Mode de phase finale</label><select onchange="setFinalMode(\''+catKey+'\',this.value)">'
-    + '<option value="crossed" '+(cs.finalMode!=="sameRank"?"selected":"")+'>Demi-finales croisées (1er vs 2e, finale, classements)</option>'
+    + '<option value="crossed" '+(cs.finalMode!=="sameRank"?"selected":"")+'>'+crossedLabel+'</option>'
     + '<option value="sameRank" '+(cs.finalMode==="sameRank"?"selected":"")+'>Même rang (1er vs 1er, 2e vs 2e, …)</option>'
     + '</select></div>'
     + '</div>'
@@ -1238,12 +1432,13 @@ function renderCategoryConfig(t, catKey, cs){
       + '</select></div>'
       + '<div class="field"><label>&nbsp;</label><button class="btn ghost" style="color:#334155;background:#eef1fb" data-action="reset-category" data-cat="'+catKey+'">↺ Réinitialiser</button></div>'
       + '</div>'
-      + autoSplitHtml
       + finalModeHtml
       + rankOpts
+      + autoSplitHtml
       + poolAssignHtml
       + globalDurationHtml
       + poolSettingsHtml
+      + totalSummaryHtml
       + generateButtonHtml) : '')
     + '</div>';
 }
@@ -1254,7 +1449,11 @@ function renderMatches(t, catKey, cs){
   if(!cs.matches.length) return '<div class="card"><p style="color:var(--muted)">Aucun match généré pour le moment.</p></div>';
   const byPhase = {};
   cs.matches.forEach(m=>{
-    const key = m.phase==="poule" ? ("poule"+m.poolIndex) : m.phase;
+    let key;
+    if(m.phase==="poule") key = "poule"+m.poolIndex;
+    else if(typeof m.phase==="string" && m.phase.indexOf("elimR")===0) key = m.phase.split("_")[0];
+    else if(typeof m.phase==="string" && m.phase.indexOf("rtier")===0) key = "rtier"+m.phase.replace("rtier","").split("_")[0];
+    else key = m.phase;
     (byPhase[key] = byPhase[key]||[]).push(m);
   });
   const poolKeys = [];
@@ -1264,6 +1463,12 @@ function renderMatches(t, catKey, cs){
   Object.keys(byPhase).filter(k=>k.indexOf("rang")===0)
     .sort((a,b)=>parseInt(a.replace("rang",""),10)-parseInt(b.replace("rang",""),10))
     .forEach(k=>finalKeys.push(k));
+  Object.keys(byPhase).filter(k=>k.indexOf("rtier")===0)
+    .sort((a,b)=>parseInt(a.replace("rtier",""),10)-parseInt(b.replace("rtier",""),10))
+    .forEach(k=>finalKeys.push(k));
+  Object.keys(byPhase).filter(k=>k.indexOf("elimR")===0)
+    .sort((a,b)=>parseInt(a.replace("elimR",""),10)-parseInt(b.replace("elimR",""),10))
+    .forEach(k=>finalKeys.push(k));
   const collapsed = isCollapsed(catKey+"_matches");
   let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_matches"><span>📋 Calendrier des matchs</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
   if(!collapsed){
@@ -1271,7 +1476,11 @@ function renderMatches(t, catKey, cs){
       const list = byPhase[key];
       const isPool = key.startsWith("poule");
       const poolIdx = isPool ? parseInt(key.replace("poule",""),10) : null;
-      const title = isPool ? "Poule " + String.fromCharCode(65+poolIdx) : (key.indexOf("rang")===0 ? rangLabel(key) : PHASE_LABELS[key]);
+      const title = isPool ? "Poule " + String.fromCharCode(65+poolIdx)
+        : key.indexOf("rang")===0 ? rangLabel(key)
+        : key.indexOf("rtier")===0 ? tierLabel(key)
+        : key.indexOf("elimR")===0 ? elimRoundLabel(key, cs)
+        : PHASE_LABELS[key];
       const titleStyle = isPool ? ' style="color:'+poolColorVar(poolIdx)+';"' : '';
       return '<div class="phase-group"><div class="phase-title"'+titleStyle+'>🏐 '+title+'</div><div class="match-list">'
         + list.map(m=> renderMatchRow(cs, m, !hasLive)).join("")
@@ -1299,7 +1508,10 @@ function renderStandings(t, catKey, cs){
       html += '<div class="standings-row">';
       cs.poules.forEach((p,i)=>{
         if(!p.length) return;
-        html += '<div class="pool-color-block" style="--pc:'+poolColorVar(i)+';--pt:'+poolTintVar(i)+';">'+standingsTable(cs, poolStandings(cs,i), "Poule "+String.fromCharCode(65+i), i)+'</div>';
+        html += '<div class="pool-color-block" style="--pc:'+poolColorVar(i)+';--pt:'+poolTintVar(i)+';">'
+          + '<div class="pool-color-header">🏐 Poule '+String.fromCharCode(65+i)+'</div>'
+          + '<div class="pool-color-body">'+standingsTable(cs, poolStandings(cs,i), "Poule "+String.fromCharCode(65+i), i)+'</div>'
+          + '</div>';
       });
       html += '</div>';
     } else {
