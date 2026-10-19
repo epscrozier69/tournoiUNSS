@@ -530,6 +530,17 @@ function resetCategory(cat){
   cs.poules = []; cs.matches = []; cs.refereeCounts = {}; cs.stage = "setup";
   saveDB(); render();
 }
+function deleteCategory(cat){
+  const t = currentTournament(); if(!t) return;
+  const def = CATEGORIES_BY_TYPE[t.type].find(d=>d.key===cat);
+  const label = def ? def.label : cat;
+  if(!confirm("Supprimer définitivement toutes les données de la catégorie \""+label+"\" (établissements engagés, équipes, matchs, résultats) ? L'autre catégorie de ce tournoi ne sera pas touchée.")) return;
+  Object.keys(t.etablissements||{}).forEach(estab=>{
+    if(t.etablissements[estab]) delete t.etablissements[estab][cat];
+  });
+  t.categories[cat] = createCategoryState();
+  saveDB(); render();
+}
 
 /* ===================== POULES ===================== */
 function setPoolCount(cat, n){
@@ -1477,6 +1488,7 @@ function renderCategoryConfig(t, catKey, cs){
       + [1,2,3,4,5,6].map(function(n){ return '<option value="'+n+'" '+(cs.poolCount===n?"selected":"")+'>'+n+' poule'+(n>1?"s":"")+'</option>'; }).join("")
       + '</select></div>'
       + '<div class="field"><label>&nbsp;</label><button class="btn ghost" style="color:#334155;background:#eef1fb" data-action="reset-category" data-cat="'+catKey+'">↺ Réinitialiser</button></div>'
+      + '<div class="field"><label>&nbsp;</label><button class="btn danger" data-action="delete-category" data-cat="'+catKey+'">🗑 Supprimer cette catégorie</button></div>'
       + '</div>'
       + finalModeHtml
       + rankOpts
@@ -1760,6 +1772,7 @@ document.body.addEventListener("click", e=>{
     case "auto-split": autoSplit(el.dataset.cat); break;
     case "gen-schedule": genSchedule(el.dataset.cat); break;
     case "reset-category": resetCategory(el.dataset.cat); break;
+    case "delete-category": deleteCategory(el.dataset.cat); break;
     case "remove-estab": removeEstablishment(el.dataset.estab); break;
     case "start-match": startMatch(el.dataset.id); break;
     case "reopen-match": reopenMatch(el.dataset.id); break;
