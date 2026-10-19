@@ -139,6 +139,7 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 
 .pool-config-table{width:100%;border-collapse:collapse;margin-top:8px;}
 .pool-config-table td,.pool-config-table th{padding:7px 10px;border-bottom:1px solid var(--line);font-size:.86rem;}
+.pool-config-table th{color:#475569;text-transform:uppercase;letter-spacing:.3px;font-weight:700;font-size:.74rem;}
 .pool-config-table select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);font-weight:600;}
 .pool-config-table input[type=number]{width:62px;padding:6px;border-radius:8px;border:1px solid var(--line);text-align:center;font-weight:700;}
 
@@ -160,8 +161,18 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 .toggle-switch input:checked + .track::before{transform:translateX(18px);}
 .generate-schedule-center{text-align:center;margin-top:20px;padding-top:16px;border-top:1px dashed var(--line);}
 .btn-generate{font-size:1rem;padding:13px 32px;box-shadow:0 4px 14px rgba(234,88,12,.35);}
+.auto-split-row{text-align:center;margin:4px 0 14px;}
+.btn-auto-split{
+  border:none;border-radius:12px;padding:13px 28px;font-weight:800;font-size:.95rem;
+  background:linear-gradient(120deg,#7c3aed,#2563eb);color:#fff;cursor:pointer;
+  box-shadow:0 4px 14px rgba(124,58,237,.4);transition:.15s;
+}
+.btn-auto-split:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(124,58,237,.5);}
 .pool-settings-total{font-size:.8rem;color:#475569;background:rgba(255,255,255,.6);border-radius:8px;padding:6px 10px;text-align:center;}
-.pool-total-summary{font-size:.85rem;color:#1e3a8a;font-weight:600;margin-top:10px;background:#eef1fb;border-radius:10px;padding:10px 14px;display:block;width:100%;box-sizing:border-box;text-align:center;}
+.pool-total-summary{font-size:1rem;color:#1e3a8a;font-weight:600;margin-top:14px;background:#eef1fb;border:2px solid #c7d2fe;border-radius:12px;padding:14px 18px;display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;text-align:center;}
+.pool-total-summary b{font-size:1.1rem;color:#1d4ed8;}
+.pool-total-summary .pool-total-grand{font-size:1.2rem;font-weight:700;border-top:1px dashed #c7d2fe;padding-top:8px;}
+.pool-total-summary .pool-total-grand b{font-size:1.4rem;color:#ea580c;}
 .pools-matches-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;}
 .pools-matches-row>div{flex:1;min-width:320px;}
 
@@ -561,7 +572,8 @@ function toggleRankOpt(cat, key, checked){
 }
 function setDuration(cat, val){
   const t = currentTournament(); const cs = t.categories[cat];
-  cs.matchDuration = Math.max(1, Math.min(90, parseInt(val,10)||10));
+  if(val===""||val==null){ cs.matchDuration = null; }
+  else { cs.matchDuration = Math.max(1, Math.min(90, parseInt(val,10)||10)); }
   saveDB(); render();
 }
 
@@ -596,6 +608,18 @@ function poolMatchCount(cs, poolIndex){
   const single = n*(n-1)/2;
   const dbl = !!(cs.poolDoubleRound && cs.poolDoubleRound[poolIndex]);
   return dbl ? single*2 : single;
+}
+function estimateFinalPhaseMatches(cs){
+  if(cs.poolCount!==2) return 0;
+  const n0 = cs.poules[0] ? cs.poules[0].length : 0;
+  const n1 = cs.poules[1] ? cs.poules[1].length : 0;
+  if(n0<2 || n1<2) return 0;
+  if(cs.finalMode==="sameRank") return Math.min(n0, n1);
+  let count = 3; // demi1, demi2, finale
+  if(cs.rankingOptions.cl34) count++;
+  if(cs.rankingOptions.clDernier) count++;
+  if(cs.rankingOptions.cl3e && n0>=4 && n1>=4) count++;
+  return count;
 }
 function formatMinutes(mins){
   if(mins<60) return mins+" min";
@@ -807,8 +831,9 @@ function maybeGenerateFinalPhase(catKey){
 
 /* ===================== DEROULE D'UN MATCH ===================== */
 function matchDurationMinutes(cs, m){
+  if(cs.matchDuration!=null) return cs.matchDuration;
   if(m.phase==="poule" && cs.poolDurations && cs.poolDurations[m.poolIndex]!=null) return cs.poolDurations[m.poolIndex];
-  return cs.matchDuration;
+  return 10;
 }
 function remainingSeconds(cs, m){
   const elapsed = m.timer.accumulatedSec + (m.timer.running ? (nowSec()-m.timer.startedAt) : 0);
@@ -1120,16 +1145,21 @@ function renderCategoryConfig(t, catKey, cs){
       }
       return '<tr><td>'+esc(e.nom)+'</td><td>'+colorCellHtml(catKey,e)+'</td>'+poolCell+'</tr>';
     }).join("");
-    poolAssignHtml = '<table class="pool-config-table"><tr><th>Équipe</th><th>Couleur</th>'+(showPool?"<th>Poule</th>":"")+'</tr>'+rows+'</table>'
-      + (showPool ? '<div style="margin-top:10px;"><button class="btn small" data-action="auto-split" data-cat="'+catKey+'">🔀 Répartir automatiquement</button></div>' : '');
+    poolAssignHtml = (showPool ? '<div class="auto-split-row"><button class="btn-auto-split" data-action="auto-split" data-cat="'+catKey+'">🔀 Répartir automatiquement</button></div>' : '')
+      + '<table class="pool-config-table"><tr><th>Équipe</th><th>Couleur</th>'+(showPool?"<th>Poule</th>":"")+'</tr>'+rows+'</table>';
   }
   const generateButtonHtml = cs.equipes.length ? '<div class="generate-schedule-center"><button class="btn accent btn-generate" data-action="gen-schedule" data-cat="'+catKey+'">📅 '+(cs.matches.length?"Régénérer":"Générer")+' le calendrier</button></div>' : "";
   let poolSettingsHtml = "";
+  const synced = cs.matchDuration!=null;
+  const globalDurationHtml = '<div class="field-row" style="margin-top:14px;">'
+    + '<div class="field"><label>Durée des matchs (min)</label><input type="number" min="1" max="90" placeholder="Vide = par poule" value="'+(synced?cs.matchDuration:"")+'" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
+    + '</div>'
+    + (cs.poolCount>=2 ? '<p style="font-size:.78rem;color:var(--muted);margin:2px 0 10px;">Si cette case est complétée, la même durée s\'applique à toutes les poules. Si elle est vide, choisissez une durée différente pour chaque poule ci-dessous.</p>' : '');
   if(cs.poolCount>=2){
     const cards = [];
     let totalTournamentMin = 0;
     for(let i=0;i<cs.poolCount;i++){
-      const dur = (cs.poolDurations && cs.poolDurations[i]!=null) ? cs.poolDurations[i] : cs.matchDuration;
+      const dur = synced ? cs.matchDuration : ((cs.poolDurations && cs.poolDurations[i]!=null) ? cs.poolDurations[i] : 10);
       const dbl = !!(cs.poolDoubleRound && cs.poolDoubleRound[i]);
       const n = cs.poules[i] ? cs.poules[i].length : 0;
       const nbMatches = poolMatchCount(cs, i);
@@ -1140,17 +1170,23 @@ function renderCategoryConfig(t, catKey, cs){
         + '<div class="pool-settings-head"><span class="pool-badge" style="background:var(--col'+(i%8)+'-h)">'+String.fromCharCode(65+i)+'</span>'
         + '<div><div class="pool-settings-title">Poule '+String.fromCharCode(65+i)+'</div><div class="pool-settings-sub">'+n+' équipe'+(n>1?"s":"")+'</div></div></div>'
         + '<div class="pool-settings-body">'
-        + '<label class="pool-settings-duration">⏱ Durée d\'un match (min)<input type="number" min="1" max="90" value="'+dur+'" id="poolDurInput_'+i+'"'
+        + '<label class="pool-settings-duration">⏱ Durée d\'un match (min)<input type="number" min="1" max="90" value="'+dur+'" id="poolDurInput_'+i+'" '+(synced?"disabled title=\"Synchronisée sur toutes les poules — videz 'Durée des matchs' ci-dessus pour régler poule par poule\"":"")+''
         + ' onfocus="this.select()" onchange="setPoolDuration(\''+catKey+'\','+i+',this.value)" onkeydown="handlePoolDurationKeydown(event,\''+catKey+'\','+i+')"></label>'
         + '<label class="toggle-switch">🔁 Matchs aller-retour<input type="checkbox" '+(dbl?"checked":"")+' onchange="togglePoolDoubleRound(\''+catKey+'\','+i+',this.checked)"><span class="track"></span></label>'
         + '<div class="pool-settings-total">🧮 '+nbMatches+' match'+(nbMatches>1?"s":"")+' × '+dur+' min = <b>'+formatMinutes(totalMin)+'</b></div>'
         + '</div></div>'
       );
     }
-    poolSettingsHtml = '<div class="pool-settings-label">Réglages par poule</div>'
+    const finalDur = synced ? cs.matchDuration : 10;
+    const finalCount = estimateFinalPhaseMatches(cs);
+    const finalTotalMin = finalCount*finalDur;
+    poolSettingsHtml = '<div class="pool-settings-label">Réglages par poule'+(synced?' <span style="font-weight:600;color:var(--accent);">🔗 durée synchronisée</span>':'')+'</div>'
       + '<div class="pool-settings-grid">'+cards.join("")+'</div>'
-      + '<p style="font-size:.78rem;color:var(--muted);margin:10px 0 0;">Si les poules n\'ont pas le même nombre d\'équipes, ajustez la durée et/ou activez l\'aller-retour pour équilibrer le temps de jeu de chaque élève.</p>'
-      + '<div class="pool-total-summary">⏳ Temps total pour l\'ensemble des matchs de poule : <b>'+formatMinutes(totalTournamentMin)+'</b> (poules jouées à la suite)</div>';
+      + '<div class="pool-total-summary">'
+      +   '<div>⏳ Phase de poule ('+cards.length+' poule'+(cards.length>1?"s":"")+' jouées à la suite) : <b>'+formatMinutes(totalTournamentMin)+'</b></div>'
+      +   (finalCount>0 ? '<div>🏆 Phase finale ('+finalCount+' match'+(finalCount>1?"s":"")+' × '+finalDur+' min) : <b>'+formatMinutes(finalTotalMin)+'</b></div>' : '')
+      +   '<div class="pool-total-grand">Temps total du tournoi : <b>'+formatMinutes(totalTournamentMin+finalTotalMin)+'</b></div>'
+      + '</div>';
   }
   const finalModeHtml = cs.poolCount===2 ? (
     '<div class="field-row">'
@@ -1175,12 +1211,12 @@ function renderCategoryConfig(t, catKey, cs){
       + '<div class="field"><label>Nombre de poules</label><select onchange="setPoolCount(\''+catKey+'\',this.value)">'
       + [1,2,3,4,5,6].map(function(n){ return '<option value="'+n+'" '+(cs.poolCount===n?"selected":"")+'>'+n+' poule'+(n>1?"s":"")+'</option>'; }).join("")
       + '</select></div>'
-      + '<div class="field"><label>Durée '+(cs.poolCount>=2?"phase finale":"d\'un match")+' (min)</label><input type="number" min="1" max="90" value="'+cs.matchDuration+'" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
       + '<div class="field"><label>&nbsp;</label><button class="btn ghost" style="color:#334155;background:#eef1fb" data-action="reset-category" data-cat="'+catKey+'">↺ Réinitialiser</button></div>'
       + '</div>'
       + finalModeHtml
       + rankOpts
       + poolAssignHtml
+      + globalDurationHtml
       + poolSettingsHtml
       + generateButtonHtml) : '')
     + '</div>';
@@ -1358,17 +1394,12 @@ function render(){
   document.getElementById("tabBtnM").classList.toggle("active", tab==="M");
   document.getElementById("tabBtnF").classList.toggle("active", tab==="F");
   const catTabsBar = document.getElementById("catTabsBar");
-  if(tournament){
-    const catDefs = CATEGORIES_BY_TYPE[tournament.type];
-    if(!uiState.categoryKey || !tournament.categories[uiState.categoryKey]) uiState.categoryKey = catDefs[0].key;
-    catTabsBar.innerHTML = catDefs.map(d=>
-      '<button data-action="select-category" data-cat="'+d.key+'" class="'+(uiState.categoryKey===d.key?"active":"")+'">'+esc(d.label)+'</button>'
-    ).join("");
-    catTabsBar.classList.remove("hidden");
-  } else {
-    catTabsBar.innerHTML = "";
-    catTabsBar.classList.add("hidden");
-  }
+  const catDefs = CATEGORIES_BY_TYPE[tab];
+  if(!uiState.categoryKey || !catDefs.some(d=>d.key===uiState.categoryKey)) uiState.categoryKey = catDefs[0].key;
+  catTabsBar.innerHTML = catDefs.map(d=>
+    '<button data-action="select-category" data-cat="'+d.key+'" class="'+(uiState.categoryKey===d.key?"active":"")+'">'+esc(d.label)+'</button>'
+  ).join("");
+  catTabsBar.classList.remove("hidden");
   const app = document.getElementById("app");
   let html = renderTournamentBar(tab, ctx, tournament);
   html += tournament ? renderTournamentBody(tab, tournament) : renderNoTournament(tab);
