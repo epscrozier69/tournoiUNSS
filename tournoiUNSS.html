@@ -99,12 +99,22 @@ input,select{font-family:inherit;}
 .estab-table input[type=number]{width:62px;padding:6px;border-radius:8px;border:1px solid var(--line);text-align:center;font-weight:700;}
 .estab-table th{font-size:.78rem;text-transform:uppercase;letter-spacing:.4px;}
 
-.config-toggle{cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
 .warn-pill{background:#fef3c7;color:#92400e;padding:6px 12px;border-radius:10px;font-size:.82rem;font-weight:600;margin:8px 0;display:inline-block;}
 
-.cat-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
-.cat-tabs button{padding:9px 16px;border-radius:10px;border:2px solid transparent;background:#eef1fb;color:#334155;font-weight:700;font-size:.9rem;}
-.cat-tabs button.active{background:#1d4ed8;color:#fff;}
+#catTabsBar{
+  display:flex;gap:6px;flex-wrap:wrap;
+  background:#0b1330;padding:8px 16px;
+  position:sticky;top:128px;z-index:42;
+  box-shadow:0 4px 10px rgba(0,0,0,.2);
+}
+#catTabsBar.hidden{display:none;}
+#catTabsBar button{padding:9px 16px;border-radius:10px;border:2px solid transparent;background:#1e293b;color:#cbd5f5;font-weight:700;font-size:.9rem;}
+#catTabsBar button.active{background:#1d4ed8;color:#fff;}
+
+.collapsible-title{cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none;gap:10px;}
+.collapsible-title:hover{opacity:.85;}
+.collapsible-title .chevron{font-size:.75rem;color:var(--muted);flex:0 0 auto;transition:transform .15s ease;display:inline-block;}
+.collapsible-title .chevron.collapsed{transform:rotate(-90deg);}
 
 .table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--line);}
 table{border-collapse:collapse;width:100%;background:#fff;}
@@ -149,7 +159,7 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.55;}}
 
 #liveBanner{
-  position:sticky;top:128px;z-index:30;
+  position:sticky;top:186px;z-index:30;
   background:linear-gradient(120deg,#0f172a,#1e3a8a);
   color:#fff;border-radius:var(--radius);padding:16px 20px;margin-bottom:18px;
   box-shadow:0 8px 22px rgba(15,23,42,.35);
@@ -180,7 +190,8 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 @media (max-width:1024px){
   .topbar h1{font-size:1.1rem;}
   .main-tabs{top:58px;}
-  #liveBanner{top:112px;}
+  #catTabsBar{top:112px;}
+  #liveBanner{top:164px;}
   #chronoDisplay{font-size:2.5rem;}
   .team-score-btn .tscore{font-size:2.1rem;}
   th,td{font-size:.8rem;padding:6px 9px;}
@@ -203,6 +214,7 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
   <button id="tabBtnM" data-action="switch-tab" data-tab="M">⚽ Futsal</button>
   <button id="tabBtnF" data-action="switch-tab" data-tab="F">🎀 Futsal Féminin</button>
 </nav>
+<nav id="catTabsBar" class="hidden"></nav>
 <main id="app"></main>
 
 <script>
@@ -221,7 +233,9 @@ const STORAGE_KEY = "unssFutsalV1";
 
 /* ===================== ETAT ===================== */
 let DB = loadDB();
-let uiState = { creating:false, categoryKey:null, configOpen:true };
+let uiState = { creating:false, categoryKey:null, collapsedSections:{} };
+function isCollapsed(key){ return !!uiState.collapsedSections[key]; }
+function toggleSection(key){ uiState.collapsedSections[key] = !uiState.collapsedSections[key]; render(); }
 
 function loadDB(){
   try{
@@ -659,7 +673,7 @@ function importBackup(file){
       if(!data || !data.M || !data.F){ alert("Fichier invalide."); return; }
       if(!confirm("Importer remplacera toutes les données actuelles. Continuer ?")) return;
       DB = data;
-      uiState = { creating:false, categoryKey:null, configOpen:true };
+      uiState = { creating:false, categoryKey:null, collapsedSections:{} };
       saveDB(); render();
     }catch(e){ alert("Fichier invalide : " + e.message); }
   };
@@ -789,10 +803,10 @@ function renderEstablishmentConfig(t){
       + catDefs.map((d,i)=>'<td class="col-'+((i+1)%8)+'"></td>').join("") + '</tr>';
   }
   const header = '<tr><th class="col-0">Établissement</th>' + catDefs.map((d,i)=>'<th class="col-'+((i+1)%8)+'">'+esc(d.label)+'</th>').join("") + '</tr>';
-  const toggleLabel = uiState.configOpen ? "▲ Réduire" : "▼ Déplier";
+  const collapsed = isCollapsed("estab");
   return '<div class="card">'
-    + '<h2 class="config-toggle" data-action="toggle-config">🏫 Établissements &amp; équipes engagées <span class="btn small">'+toggleLabel+'</span></h2>'
-    + (uiState.configOpen ? ('<div class="table-wrap"><table class="estab-table">'+header+rows+'</table></div>'
+    + '<h2 class="collapsible-title" data-action="toggle-section" data-section="estab">🏫 Établissements &amp; équipes engagées <span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>'
+    + (!collapsed ? ('<div class="table-wrap"><table class="estab-table">'+header+rows+'</table></div>'
         + '<p style="font-size:.8rem;color:var(--muted);margin-top:8px;">Choisissez un établissement dans la liste déroulante pour l\'ajouter, puis saisissez le nombre d\'équipes engagées (cellule vide = 0 équipe). Appuyez sur Entrée pour passer à la ligne suivante.</p>') : '')
     + '</div>';
 }
@@ -826,19 +840,20 @@ function renderCategoryConfig(t, catKey, cs){
     + '<label class="checkline"><input type="checkbox" '+(cs.rankingOptions.cl3e?"checked":"")+' onchange="toggleRankOpt(\''+catKey+'\',\'cl3e\',this.checked)"> Classement des 3e de poule (poules de 4)</label>'
     + '</div>'
   ) : "";
+  const collapsed = isCollapsed(catKey+"_config");
   return '<div class="card">'
-    + '<h2>⚙️ Configuration — <span style="color:var(--accent2)">'+esc(cs.equipes.length)+' équipe(s)</span> <span class="badge '+cs.stage.replace("é","e")+'">'+esc(cs.stage)+'</span></h2>'
-    + warn
-    + '<div class="field-row">'
-    + '<div class="field"><label>Nombre de poules</label><select onchange="setPoolCount(\''+catKey+'\',this.value)">'
-    + [1,2,3,4,5,6].map(function(n){ return '<option value="'+n+'" '+(cs.poolCount===n?"selected":"")+'>'+n+' poule'+(n>1?"s":"")+'</option>'; }).join("")
-    + '</select></div>'
-    + '<div class="field"><label>Durée d\'un match (min)</label><input type="number" min="1" max="90" value="'+cs.matchDuration+'" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
-    + '<div class="field"><label>&nbsp;</label><button class="btn accent" data-action="gen-schedule" data-cat="'+catKey+'">📅 '+(cs.matches.length?"Régénérer":"Générer")+' le calendrier</button></div>'
-    + '<div class="field"><label>&nbsp;</label><button class="btn ghost" style="color:#334155;background:#eef1fb" data-action="reset-category" data-cat="'+catKey+'">↺ Réinitialiser</button></div>'
-    + '</div>'
-    + rankOpts
-    + poolAssignHtml
+    + '<h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_config"><span>⚙️ Configuration — <span style="color:var(--accent2)">'+esc(cs.equipes.length)+' équipe(s)</span> <span class="badge '+cs.stage.replace("é","e")+'">'+esc(cs.stage)+'</span></span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>'
+    + (!collapsed ? (warn
+      + '<div class="field-row">'
+      + '<div class="field"><label>Nombre de poules</label><select onchange="setPoolCount(\''+catKey+'\',this.value)">'
+      + [1,2,3,4,5,6].map(function(n){ return '<option value="'+n+'" '+(cs.poolCount===n?"selected":"")+'>'+n+' poule'+(n>1?"s":"")+'</option>'; }).join("")
+      + '</select></div>'
+      + '<div class="field"><label>Durée d\'un match (min)</label><input type="number" min="1" max="90" value="'+cs.matchDuration+'" onchange="setDuration(\''+catKey+'\',this.value)"></div>'
+      + '<div class="field"><label>&nbsp;</label><button class="btn accent" data-action="gen-schedule" data-cat="'+catKey+'">📅 '+(cs.matches.length?"Régénérer":"Générer")+' le calendrier</button></div>'
+      + '<div class="field"><label>&nbsp;</label><button class="btn ghost" style="color:#334155;background:#eef1fb" data-action="reset-category" data-cat="'+catKey+'">↺ Réinitialiser</button></div>'
+      + '</div>'
+      + rankOpts
+      + poolAssignHtml) : '')
     + '</div>';
 }
 
@@ -854,28 +869,34 @@ function renderMatches(t, catKey, cs){
   const order = [];
   for(let i=0;i<cs.poolCount;i++) if(byPhase["poule"+i]) order.push("poule"+i);
   ["demi1","demi2","clDernier","cl3e","finale","cl34"].forEach(k=>{ if(byPhase[k]) order.push(k); });
-  let html = '<div class="card"><h2>📋 Calendrier des matchs</h2>';
-  order.forEach(key=>{
-    const list = byPhase[key];
-    const title = key.startsWith("poule") ? "Poule " + String.fromCharCode(65+parseInt(key.replace("poule",""),10)) : PHASE_LABELS[key];
-    html += '<div class="phase-group"><div class="phase-title">🏐 '+title+'</div><div class="match-list">'
-      + list.map(m=> renderMatchRow(cs, m, !hasLive)).join("")
-      + '</div></div>';
-  });
+  const collapsed = isCollapsed(catKey+"_matches");
+  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_matches"><span>📋 Calendrier des matchs</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
+  if(!collapsed){
+    order.forEach(key=>{
+      const list = byPhase[key];
+      const title = key.startsWith("poule") ? "Poule " + String.fromCharCode(65+parseInt(key.replace("poule",""),10)) : PHASE_LABELS[key];
+      html += '<div class="phase-group"><div class="phase-title">🏐 '+title+'</div><div class="match-list">'
+        + list.map(m=> renderMatchRow(cs, m, !hasLive)).join("")
+        + '</div></div>';
+    });
+  }
   html += '</div>';
   return html;
 }
 
 function renderStandings(t, catKey, cs){
-  let html = '<div class="card"><h2>📊 Classement général — '+esc(CATEGORIES_BY_TYPE[t.type].find(c=>c.key===catKey).label)+'</h2>';
-  html += standingsTable(cs, overallStandings(cs), "Toutes rencontres confondues (poules + phases finales)");
-  if(cs.poolCount===2 && cs.poules.some(p=>p.length)){
-    html += '<div class="standings-row">';
-    cs.poules.forEach((p,i)=>{
-      if(!p.length) return;
-      html += '<div>'+standingsTable(cs, poolStandings(cs,i), "Poule "+String.fromCharCode(65+i))+'</div>';
-    });
-    html += '</div>';
+  const collapsed = isCollapsed(catKey+"_standings");
+  let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_standings"><span>📊 Classement général — '+esc(CATEGORIES_BY_TYPE[t.type].find(c=>c.key===catKey).label)+'</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
+  if(!collapsed){
+    html += standingsTable(cs, overallStandings(cs), "Toutes rencontres confondues (poules + phases finales)");
+    if(cs.poolCount===2 && cs.poules.some(p=>p.length)){
+      html += '<div class="standings-row">';
+      cs.poules.forEach((p,i)=>{
+        if(!p.length) return;
+        html += '<div>'+standingsTable(cs, poolStandings(cs,i), "Poule "+String.fromCharCode(65+i))+'</div>';
+      });
+      html += '</div>';
+    }
   }
   html += '</div>';
   return html;
@@ -891,9 +912,6 @@ function renderTournamentBody(tab, t){
   if(!uiState.categoryKey || !t.categories[uiState.categoryKey]) uiState.categoryKey = catDefs[0].key;
   let html = renderLiveBanner();
   html += renderEstablishmentConfig(t);
-  html += '<div class="cat-tabs">' + catDefs.map(d=>
-    '<button data-action="select-category" data-cat="'+d.key+'" class="'+(uiState.categoryKey===d.key?"active":"")+'">'+esc(d.label)+'</button>'
-  ).join("") + '</div>';
   html += renderCategoryView(t, uiState.categoryKey);
   return html;
 }
@@ -943,6 +961,18 @@ function render(){
   const tournament = ctx.tournaments.find(t=>t.id===ctx.currentId) || null;
   document.getElementById("tabBtnM").classList.toggle("active", tab==="M");
   document.getElementById("tabBtnF").classList.toggle("active", tab==="F");
+  const catTabsBar = document.getElementById("catTabsBar");
+  if(tournament){
+    const catDefs = CATEGORIES_BY_TYPE[tournament.type];
+    if(!uiState.categoryKey || !tournament.categories[uiState.categoryKey]) uiState.categoryKey = catDefs[0].key;
+    catTabsBar.innerHTML = catDefs.map(d=>
+      '<button data-action="select-category" data-cat="'+d.key+'" class="'+(uiState.categoryKey===d.key?"active":"")+'">'+esc(d.label)+'</button>'
+    ).join("");
+    catTabsBar.classList.remove("hidden");
+  } else {
+    catTabsBar.innerHTML = "";
+    catTabsBar.classList.add("hidden");
+  }
   const app = document.getElementById("app");
   let html = renderTournamentBar(tab, ctx, tournament);
   html += tournament ? renderTournamentBody(tab, tournament) : renderNoTournament(tab);
@@ -965,7 +995,7 @@ document.body.addEventListener("click", e=>{
     }
     case "delete-tournament": deleteTournament(DB.activeTab, el.dataset.id); break;
     case "select-category": uiState.categoryKey = el.dataset.cat; render(); break;
-    case "toggle-config": uiState.configOpen = !uiState.configOpen; render(); break;
+    case "toggle-section": toggleSection(el.dataset.section); break;
     case "auto-split": autoSplit(el.dataset.cat); break;
     case "gen-schedule": genSchedule(el.dataset.cat); break;
     case "reset-category": resetCategory(el.dataset.cat); break;
