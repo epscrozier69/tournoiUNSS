@@ -160,6 +160,10 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 .toggle-switch input:checked + .track::before{transform:translateX(18px);}
 .generate-schedule-center{text-align:center;margin-top:20px;padding-top:16px;border-top:1px dashed var(--line);}
 .btn-generate{font-size:1rem;padding:13px 32px;box-shadow:0 4px 14px rgba(234,88,12,.35);}
+.pool-settings-total{font-size:.8rem;color:#475569;background:rgba(255,255,255,.6);border-radius:8px;padding:6px 10px;text-align:center;}
+.pool-total-summary{font-size:.85rem;color:#1e3a8a;font-weight:600;margin-top:10px;background:#eef1fb;border-radius:10px;padding:8px 12px;display:inline-block;}
+.pools-matches-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;}
+.pools-matches-row>div{flex:1;min-width:320px;}
 
 .phase-group{margin-top:16px;}
 .phase-title{font-weight:800;color:#1e3a8a;font-size:.92rem;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
@@ -585,6 +589,18 @@ function roundRobinRounds(ids, doubleRound){
     return rounds.concat(returnLeg);
   }
   return rounds;
+}
+function poolMatchCount(cs, poolIndex){
+  const n = cs.poules[poolIndex] ? cs.poules[poolIndex].length : 0;
+  if(n<2) return 0;
+  const single = n*(n-1)/2;
+  const dbl = !!(cs.poolDoubleRound && cs.poolDoubleRound[poolIndex]);
+  return dbl ? single*2 : single;
+}
+function formatMinutes(mins){
+  if(mins<60) return mins+" min";
+  const h = Math.floor(mins/60), m = mins%60;
+  return h+"h"+(m? String(m).padStart(2,"0") : "");
 }
 function newMatch(phase, poolIndex, a, b){
   return {
@@ -1111,10 +1127,14 @@ function renderCategoryConfig(t, catKey, cs){
   let poolSettingsHtml = "";
   if(cs.poolCount>=2){
     const cards = [];
+    let totalTournamentMin = 0;
     for(let i=0;i<cs.poolCount;i++){
       const dur = (cs.poolDurations && cs.poolDurations[i]!=null) ? cs.poolDurations[i] : cs.matchDuration;
       const dbl = !!(cs.poolDoubleRound && cs.poolDoubleRound[i]);
       const n = cs.poules[i] ? cs.poules[i].length : 0;
+      const nbMatches = poolMatchCount(cs, i);
+      const totalMin = nbMatches*dur;
+      totalTournamentMin += totalMin;
       cards.push(
         '<div class="pool-settings-card">'
         + '<div class="pool-settings-head"><span class="pool-badge" style="background:var(--col'+(i%8)+'-h)">'+String.fromCharCode(65+i)+'</span>'
@@ -1123,12 +1143,14 @@ function renderCategoryConfig(t, catKey, cs){
         + '<label class="pool-settings-duration">⏱ Durée d\'un match (min)<input type="number" min="1" max="90" value="'+dur+'" id="poolDurInput_'+i+'"'
         + ' onfocus="this.select()" onchange="setPoolDuration(\''+catKey+'\','+i+',this.value)" onkeydown="handlePoolDurationKeydown(event,\''+catKey+'\','+i+')"></label>'
         + '<label class="toggle-switch">🔁 Matchs aller-retour<input type="checkbox" '+(dbl?"checked":"")+' onchange="togglePoolDoubleRound(\''+catKey+'\','+i+',this.checked)"><span class="track"></span></label>'
+        + '<div class="pool-settings-total">🧮 '+nbMatches+' match'+(nbMatches>1?"s":"")+' × '+dur+' min = <b>'+formatMinutes(totalMin)+'</b></div>'
         + '</div></div>'
       );
     }
     poolSettingsHtml = '<div class="pool-settings-label">Réglages par poule</div>'
       + '<div class="pool-settings-grid">'+cards.join("")+'</div>'
-      + '<p style="font-size:.78rem;color:var(--muted);margin:10px 0 0;">Si les poules n\'ont pas le même nombre d\'équipes, ajustez la durée et/ou activez l\'aller-retour pour équilibrer le temps de jeu de chaque élève.</p>';
+      + '<p style="font-size:.78rem;color:var(--muted);margin:10px 0 0;">Si les poules n\'ont pas le même nombre d\'équipes, ajustez la durée et/ou activez l\'aller-retour pour équilibrer le temps de jeu de chaque élève.</p>'
+      + '<div class="pool-total-summary">⏳ Temps total pour l\'ensemble des matchs de poule : <b>'+formatMinutes(totalTournamentMin)+'</b> (poules jouées à la suite)</div>';
   }
   const finalModeHtml = cs.poolCount===2 ? (
     '<div class="field-row">'
@@ -1172,22 +1194,29 @@ function renderMatches(t, catKey, cs){
     const key = m.phase==="poule" ? ("poule"+m.poolIndex) : m.phase;
     (byPhase[key] = byPhase[key]||[]).push(m);
   });
-  const order = [];
-  for(let i=0;i<cs.poolCount;i++) if(byPhase["poule"+i]) order.push("poule"+i);
-  ["demi1","demi2","clDernier","cl3e","finale","cl34"].forEach(k=>{ if(byPhase[k]) order.push(k); });
+  const poolKeys = [];
+  for(let i=0;i<cs.poolCount;i++) if(byPhase["poule"+i]) poolKeys.push("poule"+i);
+  const finalKeys = [];
+  ["demi1","demi2","clDernier","cl3e","finale","cl34"].forEach(k=>{ if(byPhase[k]) finalKeys.push(k); });
   Object.keys(byPhase).filter(k=>k.indexOf("rang")===0)
     .sort((a,b)=>parseInt(a.replace("rang",""),10)-parseInt(b.replace("rang",""),10))
-    .forEach(k=>order.push(k));
+    .forEach(k=>finalKeys.push(k));
   const collapsed = isCollapsed(catKey+"_matches");
   let html = '<div class="card"><h2 class="collapsible-title" data-action="toggle-section" data-section="'+catKey+'_matches"><span>📋 Calendrier des matchs</span><span class="chevron'+(collapsed?" collapsed":"")+'">▾</span></h2>';
   if(!collapsed){
-    order.forEach(key=>{
+    const groupHtml = key=>{
       const list = byPhase[key];
       const title = key.startsWith("poule") ? "Poule " + String.fromCharCode(65+parseInt(key.replace("poule",""),10)) : (key.indexOf("rang")===0 ? rangLabel(key) : PHASE_LABELS[key]);
-      html += '<div class="phase-group"><div class="phase-title">🏐 '+title+'</div><div class="match-list">'
+      return '<div class="phase-group"><div class="phase-title">🏐 '+title+'</div><div class="match-list">'
         + list.map(m=> renderMatchRow(cs, m, !hasLive)).join("")
         + '</div></div>';
-    });
+    };
+    if(poolKeys.length>1){
+      html += '<div class="pools-matches-row">' + poolKeys.map(k=>'<div>'+groupHtml(k)+'</div>').join("") + '</div>';
+    } else {
+      poolKeys.forEach(k=> html += groupHtml(k));
+    }
+    finalKeys.forEach(k=> html += groupHtml(k));
   }
   html += '</div>';
   return html;
