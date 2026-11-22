@@ -1,0 +1,27 @@
+{
+  "activeTab": "F",
+  "activeCategory": {
+    "M": "benjamins",
+    "F": "benjamines"
+  },
+  "M": {
+    "benjamins": {
+      "tournaments": [],
+      "currentId": null
+    },
+    "minimesG": {
+      "tournaments": [],
+      "currentId": null
+    }
+  },
+  "F": {
+    "benjamines": {
+      "tournaments": [],
+      "currentId": null
+    },
+    "minimesF": {
+      "tournaments": [],
+      "currentId": null
+    }
+  }
+}

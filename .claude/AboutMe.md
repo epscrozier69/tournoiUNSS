@@ -1,0 +1,1 @@
+Je suis professeure d'EPS qui souhaite développer des applications html, pour me faciliter la prise de performance lors des séances d'EPS. Je suis novice dans visual studio code. Il me faut des explications claires et précises des démarches à suivre à chaque fois.
