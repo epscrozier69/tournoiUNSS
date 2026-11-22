@@ -284,7 +284,7 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 <header class="topbar">
   <h1><span class="ball">🏆</span> UNSS Gestion tournoi futsal</h1>
   <div class="backup-controls">
-    <span id="syncStatus" class="sync-status" data-action="sync-settings" title="Cliquer pour configurer l'adresse de synchronisation">🔄 Synchronisation…</span>
+    <span id="syncStatus" class="sync-status">🔄 Synchronisation…</span>
     <button class="btn ghost" data-action="sync-now">🔁 Synchroniser</button>
     <button class="btn ghost" data-action="export-backup">💾 Exporter une sauvegarde</button>
     <label class="file-btn">📂 Importer<input type="file" id="importFile" accept="application/json"></label>
@@ -1222,31 +1222,17 @@ function handleSwap(matchId, slot, value){
 }
 
 /* ===================== SYNCHRONISATION CLOUD (Google Sheets) ===================== */
-const SYNC_URL_KEY = "unssSyncUrl";
+const SYNC_URL = "https://script.google.com/macros/s/AKfycbwcwh7W1Bn9_C3Dxq0gAqDlxAI2uzhOUvEBsWu43DUn5dJWM4uJXRGcE-mo6leSFmI/exec";
 let cloudPushTimer = null;
 let cloudSyncInProgress = false;
 
-function getSyncUrl(){ return (localStorage.getItem(SYNC_URL_KEY) || "").trim(); }
+function getSyncUrl(){ return SYNC_URL; }
 
 function setSyncStatus(mode, text){
   const el = document.getElementById("syncStatus");
   if(!el) return;
   el.className = "sync-status " + mode;
   el.textContent = text;
-}
-
-function promptSyncUrl(){
-  const current = getSyncUrl();
-  const url = prompt(
-    "Collez l'URL de l'application Web Google Apps Script (se termine par /exec).\n" +
-    "Laissez vide puis OK pour désactiver la synchronisation.",
-    current
-  );
-  if(url === null) return;
-  const trimmed = url.trim();
-  if(trimmed) localStorage.setItem(SYNC_URL_KEY, trimmed);
-  else localStorage.removeItem(SYNC_URL_KEY);
-  syncOnOpen();
 }
 
 function scheduleCloudPush(){
@@ -1927,7 +1913,6 @@ document.body.addEventListener("click", e=>{
     case "scroll-live": document.getElementById("liveBanner")?.scrollIntoView({behavior:"smooth"}); break;
     case "export-backup": exportBackup(); break;
     case "sync-now": syncOnOpen(); break;
-    case "sync-settings": promptSyncUrl(); break;
   }
 });
 document.getElementById("importFile").addEventListener("change", e=>{

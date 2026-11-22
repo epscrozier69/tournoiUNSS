@@ -1,20 +1,17 @@
 # Manuel utilisateur — Synchronisation multi-appareils
 
-Cette fonctionnalité permet d'ouvrir l'application `tournoiUNSS.html` depuis la tablette **et** depuis l'ordinateur, en ayant toujours les données les plus à jour, sans avoir à exporter/importer manuellement un fichier.
+Cette fonctionnalité permet d'ouvrir l'application depuis la tablette **et** depuis l'ordinateur, via l'URL en ligne (https://epscrozier69.github.io/tournoiUNSS/tournoiUNSS.html), en ayant toujours les données les plus à jour, sans avoir à exporter/importer manuellement un fichier.
 
-## 1. Mise en place (une seule fois)
+## 1. Mise en place
 
-1. Créez une nouvelle feuille Google Sheets (vide, peu importe son contenu).
-2. Menu **Extensions → Apps Script**.
-3. Supprimez le code par défaut et collez le script de synchronisation fourni (voir fichier `Code.gs` / instructions données par Claude lors de la mise en place).
-4. Enregistrez (icône disquette).
-5. **Déployer → Nouveau déploiement** → type **Application Web**.
-   - Exécuter en tant que : **Moi**
-   - Qui a accès : **Tout le monde**
-6. Cliquez sur **Déployer**, puis autorisez l'accès à votre compte Google.
-7. Copiez l'URL de l'application Web obtenue (elle se termine par `/exec`).
-8. Dans `tournoiUNSS.html`, cliquez sur le badge en haut à gauche (près du bouton "🔁 Synchroniser") et collez cette URL dans la fenêtre qui s'ouvre. Validez.
-9. **Répétez l'étape 8 sur chaque appareil** (tablette et ordinateur) avec la **même URL**, afin que les deux appareils pointent vers le même Google Sheet.
+L'adresse de synchronisation (Google Apps Script) est déjà intégrée dans l'application : il n'y a rien à configurer sur les appareils, la synchronisation fonctionne dès l'ouverture de la page.
+
+Cette adresse a été mise en place une fois pour toutes via :
+1. Une feuille Google Sheets dédiée.
+2. Un script Apps Script (menu **Extensions → Apps Script**) qui lit/écrit les données de l'application dans cette feuille.
+3. Un déploiement du script en **Application Web** (accès : Tout le monde), dont l'URL est intégrée directement dans le code de `tournoiUNSS.html` (constante `SYNC_URL`).
+
+Si un jour il faut changer de feuille Google Sheets ou redéployer le script, il suffit de remplacer la valeur de `SYNC_URL` dans `tournoiUNSS.html`.
 
 ## 2. Utilisation au quotidien
 
@@ -25,7 +22,7 @@ Cette fonctionnalité permet d'ouvrir l'application `tournoiUNSS.html` depuis la
   - ✅ **Synchronisé** — tout est à jour.
   - 🔄 **Synchronisation…** — envoi ou récupération en cours.
   - ⚠️ **Hors ligne** — pas de connexion internet ; l'application continue de fonctionner normalement avec les données locales, la synchronisation reprendra automatiquement à la prochaine ouverture ou au clic sur "Synchroniser" une fois la connexion revenue.
-  - ⚙️ **Non configurée** — l'URL de synchronisation n'a pas encore été saisie sur cet appareil (voir étape 8 ci-dessus).
+  - ⚙️ **Non configurée** — ne devrait normalement jamais apparaître, l'adresse étant déjà intégrée dans l'application.
 
 ## 3. Points importants
 
