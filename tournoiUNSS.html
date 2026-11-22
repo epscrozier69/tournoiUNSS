@@ -62,6 +62,10 @@ input,select{font-family:inherit;}
 .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;}
 .file-btn{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:9px 14px;font-weight:600;font-size:.85rem;}
 .file-btn input{display:none;}
+.sync-status{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:9px 14px;font-weight:600;font-size:.85rem;}
+.sync-status.ok{color:#bbf7d0;}
+.sync-status.err{color:#fecaca;}
+.sync-status.busy{color:#fde68a;}
 
 .main-tabs{
   display:flex;gap:6px;padding:10px 16px 0;background:#0f172a;
@@ -280,6 +284,8 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
 <header class="topbar">
   <h1><span class="ball">🏆</span> UNSS Gestion tournoi futsal</h1>
   <div class="backup-controls">
+    <span id="syncStatus" class="sync-status" data-action="sync-settings" title="Cliquer pour configurer l'adresse de synchronisation">🔄 Synchronisation…</span>
+    <button class="btn ghost" data-action="sync-now">🔁 Synchroniser</button>
     <button class="btn ghost" data-action="export-backup">💾 Exporter une sauvegarde</button>
     <label class="file-btn">📂 Importer<input type="file" id="importFile" accept="application/json"></label>
   </div>
@@ -401,7 +407,11 @@ function loadDB(){
   }catch(e){ console.warn("Lecture sauvegarde impossible", e); }
   return freshDB();
 }
-function saveDB(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }
+function saveDB(){
+  DB.lastModified = Date.now();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+  scheduleCloudPush();
+}
 
 /* ===================== UTILITAIRES ===================== */
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
@@ -1211,6 +1221,90 @@ function handleSwap(matchId, slot, value){
   swapMatchTeam(matchId, slot, parts[0], parts[1]);
 }
 
+/* ===================== SYNCHRONISATION CLOUD (Google Sheets) ===================== */
+const SYNC_URL_KEY = "unssSyncUrl";
+let cloudPushTimer = null;
+let cloudSyncInProgress = false;
+
+function getSyncUrl(){ return (localStorage.getItem(SYNC_URL_KEY) || "").trim(); }
+
+function setSyncStatus(mode, text){
+  const el = document.getElementById("syncStatus");
+  if(!el) return;
+  el.className = "sync-status " + mode;
+  el.textContent = text;
+}
+
+function promptSyncUrl(){
+  const current = getSyncUrl();
+  const url = prompt(
+    "Collez l'URL de l'application Web Google Apps Script (se termine par /exec).\n" +
+    "Laissez vide puis OK pour désactiver la synchronisation.",
+    current
+  );
+  if(url === null) return;
+  const trimmed = url.trim();
+  if(trimmed) localStorage.setItem(SYNC_URL_KEY, trimmed);
+  else localStorage.removeItem(SYNC_URL_KEY);
+  syncOnOpen();
+}
+
+function scheduleCloudPush(){
+  if(!getSyncUrl()) return;
+  clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(pushToCloud, 1500);
+}
+
+async function pushToCloud(){
+  const url = getSyncUrl();
+  if(!url) return;
+  try{
+    setSyncStatus("busy", "🔄 Envoi…");
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ data: DB })
+    });
+    setSyncStatus("ok", "✅ Synchronisé " + new Date().toLocaleTimeString());
+  }catch(e){
+    console.warn("Envoi cloud impossible", e);
+    setSyncStatus("err", "⚠️ Hors ligne (local uniquement)");
+  }
+}
+
+async function syncOnOpen(){
+  const url = getSyncUrl();
+  if(!url){
+    setSyncStatus("err", "⚙️ Synchronisation non configurée");
+    return;
+  }
+  if(cloudSyncInProgress) return;
+  cloudSyncInProgress = true;
+  setSyncStatus("busy", "🔄 Synchronisation…");
+  try{
+    const res = await fetch(url, { method: "GET" });
+    const remote = await res.json();
+    const remoteModified = remote && remote.data ? (remote.lastModified || 0) : -1;
+    const localModified = DB.lastModified || 0;
+    if(remote && remote.data && remoteModified > localModified){
+      DB = remote.data;
+      uiState = { creating:false, collapsedSections:{} };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+      render();
+      setSyncStatus("ok", "✅ Données à jour reçues " + new Date().toLocaleTimeString());
+    }else if(localModified > remoteModified){
+      await pushToCloud();
+    }else{
+      setSyncStatus("ok", "✅ Synchronisé " + new Date().toLocaleTimeString());
+    }
+  }catch(e){
+    console.warn("Synchronisation impossible", e);
+    setSyncStatus("err", "⚠️ Hors ligne (données locales)");
+  }finally{
+    cloudSyncInProgress = false;
+  }
+}
+
 /* ===================== SAUVEGARDE / RESTAURATION ===================== */
 function exportBackup(){
   const blob = new Blob([JSON.stringify(DB,null,2)], {type:"application/json"});
@@ -1832,6 +1926,8 @@ document.body.addEventListener("click", e=>{
     case "shootout": setShootoutWinner(el.dataset.id, el.dataset.team); break;
     case "scroll-live": document.getElementById("liveBanner")?.scrollIntoView({behavior:"smooth"}); break;
     case "export-backup": exportBackup(); break;
+    case "sync-now": syncOnOpen(); break;
+    case "sync-settings": promptSyncUrl(); break;
   }
 });
 document.getElementById("importFile").addEventListener("change", e=>{
@@ -1850,6 +1946,7 @@ setInterval(()=>{
 }, 500);
 
 render();
+syncOnOpen();
 </script>
 </body>
 </html>
