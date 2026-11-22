@@ -1853,16 +1853,11 @@ function renderTournamentBar(ctx, tournament){
   if(ctx.tournaments.length){
     html += '<select onchange="selectTournament(this.value)">';
     ctx.tournaments.forEach(t=>{
-      const d = new Date(t.dateCreation).toLocaleDateString("fr-FR");
-      html += '<option value="'+t.id+'" '+(t.id===ctx.currentId?"selected":"")+'>'+esc(t.nom)+' ('+d+')</option>';
+      html += '<option value="'+t.id+'" '+(t.id===ctx.currentId?"selected":"")+'>'+esc(t.nom)+'</option>';
     });
     html += '</select>';
-    if(tournament){
-      const tCollapsed = isCollapsed("tournamentBody");
-      html += '<button class="btn" data-action="toggle-section" data-section="tournamentBody" title="'+(tCollapsed?"Afficher":"Masquer")+' le tournoi">'+(tCollapsed?"▸":"▾")+' '+(tCollapsed?"Afficher":"Masquer")+'</button>';
-    }
-    html += '<button class="btn" data-action="new-tournament">➕ Nouveau tournoi</button>';
     if(tournament) html += '<button class="btn" data-action="rename-tournament" data-id="'+tournament.id+'">✏️ Renommer</button>';
+    html += '<button class="btn" data-action="new-tournament">➕ Nouveau tournoi</button>';
     if(tournament) html += '<button class="btn danger" data-action="delete-tournament" data-id="'+tournament.id+'">🗑 Supprimer ce tournoi</button>';
   }
   html += '</div>';
@@ -1891,7 +1886,7 @@ function render(){
   catTabsBar.classList.remove("hidden");
   const app = document.getElementById("app");
   let html = renderTournamentBar(ctx, tournament);
-  html += tournament ? (isCollapsed("tournamentBody") ? "" : renderTournamentBody(tournament)) : renderNoTournament();
+  html += tournament ? renderTournamentBody(tournament) : renderNoTournament();
   app.innerHTML = html;
 }
 
