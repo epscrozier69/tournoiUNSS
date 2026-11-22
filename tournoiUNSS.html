@@ -1543,6 +1543,7 @@ function renderCategoryConfig(t){
     + '</div>'
     + (cs.poolCount>=2 ? '<p style="font-size:.78rem;color:var(--muted);margin:2px 0 10px;">Si cette case est complétée, la même durée s\'applique à toutes les poules. Si elle est vide, choisissez une durée différente pour chaque poule ci-dessous.</p>' : '');
   let totalTournamentMin = 0;
+  let totalPoolMatches = 0;
   let nbPoulesJouees = 0;
   if(cs.poolCount>=2){
     const cards = [];
@@ -1553,6 +1554,7 @@ function renderCategoryConfig(t){
       const nbMatches = poolMatchCount(cs, i);
       const totalMin = nbMatches*dur;
       totalTournamentMin += totalMin;
+      totalPoolMatches += nbMatches;
       nbPoulesJouees++;
       cards.push(
         '<div class="pool-settings-card">'
@@ -1573,6 +1575,7 @@ function renderCategoryConfig(t){
     const n = cs.equipes.length;
     const nbMatches = n*(n-1)/2;
     totalTournamentMin = nbMatches*dur;
+    totalPoolMatches = nbMatches;
     nbPoulesJouees = 1;
   }
   let totalSummaryHtml = "";
@@ -1580,10 +1583,11 @@ function renderCategoryConfig(t){
     const finalDur = synced ? cs.matchDuration : 10;
     const finalCount = estimateFinalPhaseMatches(cs);
     const finalTotalMin = finalCount*finalDur;
+    const totalMatches = totalPoolMatches + finalCount;
     totalSummaryHtml = '<div class="pool-total-summary">'
-      +   '<div>⏳ Phase de poule'+(nbPoulesJouees>1?(' ('+nbPoulesJouees+' poules jouées à la suite)'):'')+' : <b>'+formatMinutes(totalTournamentMin)+'</b></div>'
+      +   '<div>⏳ Phase de poule'+(nbPoulesJouees>1?(' ('+nbPoulesJouees+' poules jouées à la suite)'):'')+' : <b>'+formatMinutes(totalTournamentMin)+'</b> — '+totalPoolMatches+' match'+(totalPoolMatches>1?"s":"")+'</div>'
       +   (finalCount>0 ? '<div>🏆 Phase finale ('+finalCount+' match'+(finalCount>1?"s":"")+' × '+finalDur+' min) : <b>'+formatMinutes(finalTotalMin)+'</b></div>' : '')
-      +   '<div class="pool-total-grand">Temps total du tournoi : <b>'+formatMinutes(totalTournamentMin+finalTotalMin)+'</b></div>'
+      +   '<div class="pool-total-grand">Temps total du tournoi : <b>'+formatMinutes(totalTournamentMin+finalTotalMin)+'</b> — <b>'+totalMatches+' match'+(totalMatches>1?"s":"")+'</b> au total</div>'
       + '</div>';
   }
   const crossedLabel = cs.poolCount===2
