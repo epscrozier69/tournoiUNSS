@@ -16,6 +16,7 @@ Concevoir un fichier html unique, permettant la gestion de tournoi UNSS en futsa
    - Minimes G ou Minimes F suivant si futsal ou futsal féminin
 * Je veux pouvoir créer plusieurs tournois avec continuité des résultats.
 * Je veux pouvoir aussi supprimer le tournoi
+* Je veux pouvoir renommer un tournoi existant
 
 # Comportement
 * Je veux pouvoir choisir le nombre de poules (1 à 6 poules)

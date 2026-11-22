@@ -511,6 +511,17 @@ function deleteTournament(id){
   }
   saveDB(); render();
 }
+function renameTournament(id){
+  const tab = DB.activeTab; const cat = DB.activeCategory[tab];
+  const t = DB[tab][cat].tournaments.find(t=>t.id===id);
+  if(!t) return;
+  const name = prompt("Nouveau nom du tournoi :", t.nom);
+  if(name===null) return;
+  const trimmed = name.trim();
+  if(!trimmed) return;
+  t.nom = trimmed;
+  saveDB(); render();
+}
 function selectTournament(id){
   const tab = DB.activeTab; const cat = DB.activeCategory[tab];
   DB[tab][cat].currentId = id;
@@ -1851,6 +1862,7 @@ function renderTournamentBar(ctx, tournament){
       html += '<button class="btn" data-action="toggle-section" data-section="tournamentBody" title="'+(tCollapsed?"Afficher":"Masquer")+' le tournoi">'+(tCollapsed?"▸":"▾")+' '+(tCollapsed?"Afficher":"Masquer")+'</button>';
     }
     html += '<button class="btn" data-action="new-tournament">➕ Nouveau tournoi</button>';
+    if(tournament) html += '<button class="btn" data-action="rename-tournament" data-id="'+tournament.id+'">✏️ Renommer</button>';
     if(tournament) html += '<button class="btn danger" data-action="delete-tournament" data-id="'+tournament.id+'">🗑 Supprimer ce tournoi</button>';
   }
   html += '</div>';
@@ -1898,6 +1910,7 @@ document.body.addEventListener("click", e=>{
       break;
     }
     case "delete-tournament": deleteTournament(el.dataset.id); break;
+    case "rename-tournament": renameTournament(el.dataset.id); break;
     case "select-category": switchCategory(el.dataset.cat); break;
     case "toggle-section": toggleSection(el.dataset.section); break;
     case "auto-split": autoSplit(); break;
