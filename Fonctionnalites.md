@@ -67,3 +67,4 @@ Concevoir un fichier html unique, permettant la gestion de tournoi UNSS en futsa
 * Un bouton permet de forcer une synchronisation manuelle à tout moment
 * En cas de perte de connexion, l'application continue de fonctionner avec les données locales et se resynchronise automatiquement dès que la connexion revient (prochaine ouverture ou synchronisation manuelle)
 * En cas de conflit (modifications sur deux appareils), la version la plus récente (horodatage) est conservée
+* Je veux pouvoir utiliser le tournoi hors connexion (pas de wifi/4G disponible au gymnase) : une fois l'application ouverte au moins une fois avec une connexion, elle doit continuer à s'ouvrir et fonctionner normalement sans connexion internet

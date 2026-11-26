@@ -29,3 +29,13 @@ Si un jour il faut changer de feuille Google Sheets ou redéployer le script, il
 - Une connexion internet est nécessaire pour synchroniser (pas pour utiliser l'application, qui fonctionne aussi hors ligne avec les dernières données connues).
 - Si deux appareils modifient les données **en même temps** sans synchroniser entre les deux, c'est la modification la plus récente qui est conservée lors de la prochaine synchronisation (l'autre est perdue). Pensez à synchroniser avant de changer d'appareil pour éviter ce cas.
 - L'export/import manuel de fichier JSON (boutons "💾 Exporter une sauvegarde" / "📂 Importer") reste disponible en complément, pour une sauvegarde de secours.
+
+## 4. Utilisation sans connexion (gymnase sans wifi/4G)
+
+L'application peut fonctionner **sans aucune connexion internet**, par exemple dans un gymnase sans wifi.
+
+- **Condition unique** : il faut avoir ouvert l'application **au moins une fois avec une connexion internet** sur l'appareil (tablette ou ordinateur) utilisé, via l'adresse https://epscrozier69.github.io/tournoiUNSS/tournoiUNSS.html. Lors de cette première ouverture, l'application se met en mémoire dans le navigateur (technique dite de "service worker").
+- Ensuite, on peut rouvrir cette même adresse à tout moment, même sans connexion : la page s'affiche normalement et toutes les fonctionnalités (saisie des scores, classement, chronomètre, etc.) fonctionnent, car tout repose sur les données stockées localement.
+- Pendant l'utilisation hors connexion, le badge de synchronisation affichera ⚠️ **Hors ligne** : c'est normal, les données restent enregistrées sur l'appareil.
+- Dès que la connexion revient (retour au wifi, par exemple en rentrant du gymnase), la synchronisation reprend automatiquement et envoie les données saisies hors ligne vers le Google Sheet partagé.
+- Conseil : avant le jour du tournoi, ouvrez une fois l'application sur chaque appareil (tablette et ordinateur) avec une connexion internet, pour être certain que la mise en mémoire hors ligne est bien en place.

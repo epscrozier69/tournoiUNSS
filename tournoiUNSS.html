@@ -1232,6 +1232,13 @@ function handleSwap(matchId, slot, value){
   swapMatchTeam(matchId, slot, parts[0], parts[1]);
 }
 
+/* ===================== MODE HORS CONNEXION (Service Worker) ===================== */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Service worker indisponible", e));
+  });
+}
+
 /* ===================== SYNCHRONISATION CLOUD (Google Sheets) ===================== */
 const SYNC_URL = "https://script.google.com/macros/s/AKfycbwcwh7W1Bn9_C3Dxq0gAqDlxAI2uzhOUvEBsWu43DUn5dJWM4uJXRGcE-mo6leSFmI/exec";
 let cloudPushTimer = null;
