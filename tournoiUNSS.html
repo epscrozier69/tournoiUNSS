@@ -285,6 +285,7 @@ th{color:#fff;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-s
   <h1><span class="ball">🏆</span> UNSS Gestion tournoi futsal</h1>
   <div class="backup-controls">
     <span id="syncStatus" class="sync-status">🔄 Synchronisation…</span>
+    <span id="offlineStatus" class="sync-status busy">⏳ Préparation hors-ligne…</span>
     <button class="btn ghost" data-action="sync-now">🔁 Synchroniser</button>
     <button class="btn ghost" data-action="export-backup">💾 Exporter une sauvegarde</button>
     <label class="file-btn">📂 Importer<input type="file" id="importFile" accept="application/json"></label>
@@ -1233,10 +1234,40 @@ function handleSwap(matchId, slot, value){
 }
 
 /* ===================== MODE HORS CONNEXION (Service Worker) ===================== */
+const OFFLINE_CACHE_NAME = "unss-futsal-shell-v1";
+
+function setOfflineStatus(mode, text){
+  const el = document.getElementById("offlineStatus");
+  if(!el) return;
+  el.className = "sync-status " + mode;
+  el.textContent = text;
+}
+
+async function checkOfflineReady(attempt){
+  attempt = attempt || 0;
+  try{
+    const cache = await caches.open(OFFLINE_CACHE_NAME);
+    const match = await cache.match("tournoiUNSS.html");
+    if(match){
+      setOfflineStatus("ok", "📴 Disponible hors-ligne");
+      return;
+    }
+  }catch(e){ /* caches API indisponible */ }
+  if(attempt < 15){
+    setTimeout(() => checkOfflineReady(attempt + 1), 1000);
+  }else{
+    setOfflineStatus("err", "⚠️ Hors-ligne pas encore prêt (réessayez plus tard)");
+  }
+}
+
 if("serviceWorker" in navigator){
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Service worker indisponible", e));
+    navigator.serviceWorker.register("sw.js")
+      .then(() => checkOfflineReady())
+      .catch((e) => { console.warn("Service worker indisponible", e); setOfflineStatus("err", "❌ Hors-ligne indisponible sur cet appareil"); });
   });
+}else{
+  setOfflineStatus("err", "❌ Hors-ligne non supporté par ce navigateur");
 }
 
 /* ===================== SYNCHRONISATION CLOUD (Google Sheets) ===================== */
