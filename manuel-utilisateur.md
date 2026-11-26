@@ -35,6 +35,7 @@ Si un jour il faut changer de feuille Google Sheets ou redéployer le script, il
 L'application peut fonctionner **sans aucune connexion internet**, par exemple dans un gymnase sans wifi.
 
 - **Condition unique** : il faut avoir ouvert l'application **au moins une fois avec une connexion internet** sur l'appareil (tablette ou ordinateur) utilisé, via l'adresse https://epscrozier69.github.io/tournoiUNSS/tournoiUNSS.html. Lors de cette première ouverture, l'application se met en mémoire dans le navigateur (technique dite de "service worker").
+- Un badge dans l'en-tête, à côté de "🔁 Synchroniser", confirme l'état : "⏳ Préparation hors-ligne…" pendant la mise en mémoire, puis **"📴 Disponible hors-ligne"** une fois prête. Attendez ce badge vert avant de couper la connexion.
 - Ensuite, on peut rouvrir cette même adresse à tout moment, même sans connexion : la page s'affiche normalement et toutes les fonctionnalités (saisie des scores, classement, chronomètre, etc.) fonctionnent, car tout repose sur les données stockées localement.
 - Pendant l'utilisation hors connexion, le badge de synchronisation affichera ⚠️ **Hors ligne** : c'est normal, les données restent enregistrées sur l'appareil.
 - Dès que la connexion revient (retour au wifi, par exemple en rentrant du gymnase), la synchronisation reprend automatiquement et envoie les données saisies hors ligne vers le Google Sheet partagé.
